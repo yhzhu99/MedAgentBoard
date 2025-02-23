@@ -1,5 +1,6 @@
 from langchain.llms import HuggingFacePipeline
 from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
+from .state import WorkflowState
 
 def initialize_local_model(
     model_name: str = "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
@@ -43,8 +44,6 @@ def initialize_gpt_model(model_name):
     os.environ["OPENAI_API_KEY"] = "sk-2Cd64920f5df1880606c597a75f9f05009d2d9222a4Jur6C"
     from langchain.chat_models import ChatOpenAI
     return ChatOpenAI(model=model_name)
-
-from graph import WorkflowState
 
 def initialize_workflow_state(user_request, data) -> WorkflowState:
     return WorkflowState(

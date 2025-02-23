@@ -1,79 +1,59 @@
 from langgraph.prebuilt import create_react_agent
 from typing import Literal
 from langchain_core.messages import BaseMessage, HumanMessage
-from langgraph.prebuilt import create_react_agent
 
 from langgraph.types import Command
 from langgraph.graph import MessagesState, START, END
 
 from langgraph.graph import StateGraph
 import json
-# from typing_extensions import TypedDict
 from typing import Literal, TypedDict, List, Dict, Any, Optional
 
-from langgraph.graph import StateGraph
-import json
-# from typing_extensions import TypedDict
-from typing import Literal, TypedDict, List, Dict, Any, Optional
 from langchain.chat_models import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 
 from langgraph.checkpoint.memory import MemorySaver
 
-from utils import *
-from prompt import *
+# from utils import *
+from .utils import *
+from .prompt import *
+from .state import WorkflowState
 
-# 暂定的全局变量
-class WorkflowState(MessagesState):
-    request: str          # 用户原始请求
-    code: Optional[str]   # 生成的代码
-    code_output: Optional[str]  # 代码运行结果
-    error: Optional[str]  # 执行错误信息
-    attempts: int         # 已尝试次数
-    data: Any        # 数据（类型暂定为<class 'pandas.core.frame.DataFrame'>）
+# # 暂定的全局变量
+# class WorkflowState(MessagesState):
+#     request: str          # 用户原始请求
+#     code: Optional[str]   # 生成的代码
+#     code_output: Optional[str]  # 代码运行结果
+#     error: Optional[str]  # 执行错误信息
+#     attempts: int         # 已尝试次数
+#     data: Any        # 数据（类型暂定为<class 'pandas.core.frame.DataFrame'>）
 
-
+# TODO 下面这段代码直接放到了全局环境中，如果该文件被重复引用可能会导致不必要的初始化等问题？
 # 初始化大语言模型
 llm = initialize_gpt_model('gpt-3.5-turbo')
+
+# 定义各项agent
 code_generator_agent = create_react_agent(
     llm,
     tools=[],
-    # state_modifier =  # TODO agent role prompt
+    # state_modifier =  # agent role prompt
     checkpointer=MemorySaver()  # 添加记忆
 )
+code_reviewer_agent = create_react_agent(
+    llm,
+    tools=[],
+    # state_modifier =  # agent role prompt
+)
 
- 
 def code_generator(state: WorkflowState) -> dict:
-    
-    # print('\n\n\ngeneration start\n\n\n')
-    
-    # # 初始化大语言模型
-    # llm = initialize_gpt_model('gpt-3.5-turbo')
-    
     # 根据不同attempt次数设计不同的prompt
     if state['attempts'] == 0:
         # prompt_input = code_generator_prompt.format(request = state['request'])
         prompt_input = code_generator_prompt2.format(request = state['request'], data_type = str(type(state['data'])), data_example = state['data'].to_string(max_rows=None, max_cols=None, max_colwidth=None)[:5000])
         print('prompt_input:', prompt_input)
         
-        # # 将字典转换为 JSON 字符串
-        # json_str = json.dumps(prompt_input, indent=4)
-
-        # # 将 JSON 字符串写入文件
-        # with open('data.json', 'w') as json_file:
-        #     json_file.write(json_str)
-        
-        # exit()
-        
     elif state['attempts'] >=1:
         prompt_input = code_generator_retry_prompt.format(error = state['error'], request = state['request'])
-    
-    # code_generator_agent = create_react_agent(
-    #     llm,
-    #     tools=[],
-    #     # state_modifier =  # TODO agent role prompt
-    #     checkpointer=MemorySaver()  # 添加记忆
-    # )
     
     config = {"configurable": {"thread_id": "thread-1"}}    # 标记线程
     inputs = {"messages": [("user", prompt_input)]}
@@ -104,9 +84,9 @@ def code_generator(state: WorkflowState) -> dict:
 
 
 def code_executor(state: WorkflowState) -> dict:
-    # TODO
     code = state["code"]
     error = None
+    output = None
     try:
         data = state['data']
         
@@ -120,15 +100,10 @@ def code_executor(state: WorkflowState) -> dict:
         print('error: ',error)
     
     return Command(
-        update = {"error": error},
+        update = {"error": error, 'code_output': output},
         goto = "code_reviewer"
     )
 
-code_reviewer_agent = create_react_agent(
-    llm,
-    tools=[],
-    # state_modifier =  # TODO agent role prompt
-)
 
 def code_reviewer(state: WorkflowState):
     # 最大尝试次数设为3次
@@ -156,6 +131,7 @@ def code_reviewer(state: WorkflowState):
     )    
 
 def build_graph():
+    
     workflow = StateGraph(WorkflowState)
     
     workflow.add_node('code_generator', code_generator)
@@ -171,29 +147,23 @@ def build_graph():
     
     return graph
 
+def run_graph(user_request, data):
+    graph = build_graph()
+    initial_state = initialize_workflow_state(user_request = user_request, data = data)
+    result = graph.invoke(initial_state)    # 真正调用时再决定输入的状态
+    print(result)
+    return result   # xxx
+    
+
 if __name__ == "__main__":
-    
-    # workflow = StateGraph(WorkflowState)
-    
-    # workflow.add_node('code_generator', code_generator)
-    # workflow.add_node('code_executor', code_executor)
-    # workflow.add_node('code_reviewer', code_reviewer)
-    
-    # workflow.add_edge(START, 'code_generator')
-    # workflow.add_edge('code_generator', 'code_executor')
-    # workflow.add_edge('code_executor', 'code_reviewer')
-    # workflow.add_edge('code_reviewer', END)
-    
-    # graph = workflow.compile()
     
     graph = build_graph()
     
-    # test_rq = "Generate a Python script to solve the first 5 terms of the Fibonacci sequence."
     test_rq = "What is the highest temperature of the patient?"
     test_data = load_raw_data()
     initial_state = initialize_workflow_state(user_request = test_rq, data = test_data)
     
-    result = graph.invoke(initial_state)
+    result = graph.invoke(initial_state)    # 真正调用时再决定输入的状态
     
     
     
