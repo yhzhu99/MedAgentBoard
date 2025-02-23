@@ -40,6 +40,7 @@ def initialize_local_model(
 
 def initialize_gpt_model(model_name):
     import os
+    # 自用小模型，仅用于小样本测试
     os.environ["OPENAI_API_BASE"] = "https://api.gptsapi.net/v1"
     os.environ["OPENAI_API_KEY"] = "sk-2Cd64920f5df1880606c597a75f9f05009d2d9222a4Jur6C"
     from langchain.chat_models import ChatOpenAI
