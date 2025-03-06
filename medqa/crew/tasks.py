@@ -11,26 +11,26 @@ class MedicalTasks:
         return [
             Task(
                 description="{question}",
-                agent=self.agents.cardiologist(),
-                expected_output="One single answer and choice with brief reasoning and explanation for the choice"
+                agent=self.agents.doctor_agent1(),
+                expected_output="As an Internist / Internal Medicine Specialist who has first-line medical expertise for common illnesses, preventive care, and initial diagnostics, Give one single answer and choice with brief reasoning and explanation for the choice"
             ),
             Task(
                 description="{question}",
-                agent=self.agents.neurologist(),
-                expected_output="One single answer and choice with brief reasoning and explanation for the choice"
+                agent=self.agents.doctor_agent2(),
+                expected_output="As a Pediatrician / Child Health Specialist who has expertise in addressing complex, multisystem diseases (e.g., diabetes, hypertension, autoimmune disorders) and interpret advanced diagnostics. Give one single answer and choice with brief reasoning and explanation for the choice"
             ),
             Task(
                 description="{question}",
-                agent=self.agents.general_physician(),
-                expected_output="One single answer and choice with brief reasoning and explanation for the choice"
+                agent=self.agents.doctor_agent3(),
+                expected_output="As a General Practitioner (GP) / Family Medicine Physiciancover with expertise on developmental, congenital, and acute/chronic conditions in infants, children, and adolescents. Give one single answer and choice with brief reasoning and explanation for the choice"
             )
         ]
     
     # Define the feedback task handled by the meta agent
-    def feedback_task(self) -> Task:
+    def feedback_task(self, state) -> Task:
         return Task(
             description="Analyze these answers and identify key disagreements:\n\n{'='*20}\n" +
-                        "\n\n".join([f"Doctor {i+1}: {ans}" for i, ans in enumerate(state['answers'])]),
+                        "\n\n".join([f"Doctor {i+1}: {ans}" for i, ans in enumerate(state['answers'])]), # TODO:Rather than quoting each doctor as "Doctor i", use the role assigned to each doctor agent
             agent=self.agents.meta_agent(),
             expected_output="Summary of conflicting opinions and suggested focus areas for next round of collaboration and refinement to reach a consensus among the doctors"
         )
@@ -40,17 +40,17 @@ class MedicalTasks:
         return [
             Task(
                 description=f"{{question}}\n\nPrevious feedback:\n{feedback}", # TODO: Add previous answers?
-                agent=self.agents.cardiologist(),
+                agent=self.agents.doctor_agent1(),
                 expected_output="Revised answer (single choice) according to the feedback"
             ),
             Task(
                 description=f"{{question}}\n\nPrevious feedback:\n{feedback}",
-                agent=self.agents.neurologist(),
+                agent=self.agents.doctor_agent2(),
                 expected_output="Revised answer (single choice) according to the feedback"
             ),
             Task(
                 description=f"{{question}}\n\nPrevious feedback:\n{feedback}",
-                agent=self.agents.general_physician(),
+                agent=self.agents.doctor_agent3(),
                 expected_output="Revised answer (single choice) according to the feedback"
             )
         ]
