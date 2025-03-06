@@ -39,19 +39,19 @@ class MedicalTasks:
     def refinement_task(self, feedback: str) -> List[Task]:
         return [
             Task(
-                description=f"{{question}}\n\nPrevious feedback:\n{feedback}", # TODO: Add previous answers?
+                description=f"{{question}}\n\nYou are doctor 1, here is the deedback from previous round of discussion with other doctors:\n{feedback}", # TODO: Add previous answers?
                 agent=self.agents.doctor_agent1(),
-                expected_output="Revised answer (single choice) according to the feedback"
+                expected_output="Give one single revised answer/choice with brief reasoning and explanation according to the feedback"
             ),
             Task(
-                description=f"{{question}}\n\nPrevious feedback:\n{feedback}",
+                description=f"{{question}}\n\nYou are doctor 2, here is the deedback from previous round of discussion with other doctors:\n{feedback}",
                 agent=self.agents.doctor_agent2(),
-                expected_output="Revised answer (single choice) according to the feedback"
+                expected_output="Give one single revised answer/choice with brief reasoning and explanation according to the feedback"
             ),
             Task(
-                description=f"{{question}}\n\nPrevious feedback:\n{feedback}",
+                description=f"{{question}}\n\nYou are doctor 3, here is the deedback from previous round of discussion with other doctors:\n{feedback}",
                 agent=self.agents.doctor_agent3(),
-                expected_output="Revised answer (single choice) according to the feedback"
+                expected_output="Give one single revised answer/choice with brief reasoning and explanation according to the feedback of previous round"
             )
         ]
         
