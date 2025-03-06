@@ -10,9 +10,14 @@ load_dotenv() # Load environment variables from .env file
 def initialize_ds_model(model_name: str) -> ChatOpenAI:
     return ChatOpenAI(
         model=model_name,
-        base_url="https://api.deepseek.com/v1",  # DeepSeek's API endpoint
+        base_url="https://api.deepseek.com/v1", 
         api_key=os.getenv("DEEPSEEK_API_KEY")   # Get your API key from environment variables
     )
+    
+def initialize_gpt_model(model_name: str) -> ChatOpenAI:
+    os.environ["OPENAI_API_BASE"] = "https://api.gptsapi.net/v1"
+    os.environ["OPENAI_API_KEY"] = os.getenv("CHATGPT_API_KEY")
+    return ChatOpenAI(model=model_name)
     
 def log_state_change(old_state: AnswerState, new_state: AnswerState):
     """
