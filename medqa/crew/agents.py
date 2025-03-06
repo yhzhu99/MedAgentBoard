@@ -5,14 +5,15 @@ from medqa.utils import *
 class MedQAAgents:
     def __init__(self):
         self.deepseek = initialize_ds_model("deepseek/deepseek-chat")
-        self.chatgpt = initialize_gpt_model("gpt-3.5-turbo")
+        self.chatgpt = initialize_gpt_model("gpt-4o-mini")
+        self.qwen = initialize_qwen_model("openai/qwen-max-latest")
         
     def doctor_agent1(self) -> Agent:
         return Agent(
             role="General Practitioner (GP) / Family Medicine Physician",
             goal="Answer the question with concise and brief reasoning, provide broad, first-line medical expertise for common illnesses, preventive care, and initial diagnostics",
             backstory="Well trained in a high-volume urban clinic, managing diverse cases ranging from infections to chronic disease management. With 15 years of experience, they excel at triaging conditions, recognizing red flags, and coordinating referrals. Their strength lies in synthesizing patient history, symptoms, and social determinants to offer holistic advice",
-            llm=self.deepseek
+            llm=self.qwen
         )
         
     def doctor_agent2(self) -> Agent:
@@ -35,5 +36,6 @@ class MedQAAgents:
         return Agent(
             role="Medical Consensus Coordinator",
             goal="Understand the answers from all doctors: If disagreements among doctors exist, identify key disagreements, and suggest focus areas for the next round of collaboration and refinement to reach a consensus among the doctors; If consensus is reached, summarize the agreed-upon answer and output the final brief answer",
+            backstory="A experienced moderator with a background in medical ethics and conflict resolution. They have facilitated numerous interdisciplinary rounds, ensuring respectful communication and shared decision-making. Their role is to synthesize diverse perspectives, clarify misunderstandings, and guide the team towards a unified conclusion.",
             llm=self.deepseek
         )
