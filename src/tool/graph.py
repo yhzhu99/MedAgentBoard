@@ -30,7 +30,7 @@ from .state import WorkflowState
 
 # TODO 下面这段代码直接放到了全局环境中，如果该文件被重复引用可能会导致不必要的初始化等问题？
 # 初始化大语言模型
-llm = initialize_gpt_model('gpt-3.5-turbo')
+llm = initialize_gpt_model('gpt-4o')
 
 # 定义各项agent
 code_generator_agent = create_react_agent(
@@ -48,8 +48,10 @@ code_reviewer_agent = create_react_agent(
 def code_generator(state: WorkflowState) -> dict:
     # 根据不同attempt次数设计不同的prompt
     if state['attempts'] == 0:
-        # prompt_input = code_generator_prompt.format(request = state['request'])
-        prompt_input = code_generator_prompt2.format(request = state['request'], data_type = str(type(state['data'])), data_example = state['data'].to_string(max_rows=None, max_cols=None, max_colwidth=None)[:5000])
+        if state['data'] is not None:
+            prompt_input = code_generator_prompt2.format(request = state['request'], data_type = str(type(state['data'])), data_example = state['data'].to_string(max_rows=None, max_cols=None, max_colwidth=None)[:5000])
+        else:
+            prompt_input = code_generator_prompt.format(request = state['request'])
         print('prompt_input:', prompt_input)
         
     elif state['attempts'] >=1:
@@ -128,7 +130,12 @@ def code_reviewer(state: WorkflowState):
     return Command(
         update = {},
         goto = END
-    )    
+    )   
+    
+    
+def meet_demand_reviewer(state: WorkflowState):
+    pass
+     
 
 def build_graph():
     
@@ -147,7 +154,7 @@ def build_graph():
     
     return graph
 
-def run_graph(user_request, data):
+def run_graph(user_request, data=None):
     graph = build_graph()
     initial_state = initialize_workflow_state(user_request = user_request, data = data)
     result = graph.invoke(initial_state)    # 真正调用时再决定输入的状态

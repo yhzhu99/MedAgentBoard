@@ -41,12 +41,21 @@ code_generator_agent_role = """
     你是一位资深Python开发工程师。
 """
 
-code_reviewer_prompt = """
-    请根据用户需求，检查答案是否符合预期。请按以下要求操作：
-    1. 只返回一个字典（dict），字典包含两个key：'judge'和'analysis',示例如下：
-        ```json\n{\n    \"judge\": [True 或 False],\n    \"analysis\": \"解释判断的理由，例如：输出是一个整数，符合期望的输出形式。\"\n}\n```
-    2. 不需要检查答案具体数值是否正确，只检查答案形式正确还是错误
+# from typing import Optional
+# from pydantic import BaseModel, Field
+
+# class judge_output_format(BaseModel):
+#     meet_demand: str = Field(description="代码以及运行结果是否满足用户需求。只能返回一个单词：'Yes'或'No'，'Yes'代表需要生成代码，'No'代表不需要生成代码。")
+#     reason: Optional[str] = Field(
+#         default=None, description="如果需要生成代码，将用户的代码需求转化为更精炼的形式。"
+#     )
+
+# code_reviewer_prompt = """
+#     请根据用户需求，检查答案是否符合预期。请按以下要求操作：
+#     1. 只返回一个字典（dict），字典包含两个key：'judge'和'analysis',示例如下：
+#         ```json\n{\n    \"judge\": [True 或 False],\n    \"analysis\": \"解释判断的理由，例如：输出是一个整数，符合期望的输出形式。\"\n}\n```
+#     2. 不需要检查答案具体数值是否正确，只检查答案形式正确还是错误
     
-    用户需求：{request}
-    答案：{output}
-"""
+#     用户需求：{request}
+#     答案：{output}
+# """

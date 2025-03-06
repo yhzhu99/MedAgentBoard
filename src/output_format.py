@@ -10,6 +10,6 @@ class judge_output_format(BaseModel):
     )
 
 
-structured_llm = llm.with_structured_output(judge_output_format)
+# structured_llm = llm.with_structured_output(judge_output_format)
 
-structured_llm.invoke("Tell me a joke about cats")
+# structured_llm.invoke("Tell me a joke about cats")
