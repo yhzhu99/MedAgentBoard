@@ -10,26 +10,23 @@ def generate_answers_node(state: Dict[str, Any]) -> Dict[str, Any]:
     agents = MedQAAgents()
     tasks = MedicalTasks(agents).initial_answer_task() # Each task corresponds to a different doctor agent
     
+    initial_answers = []
+    # Generate the initial answers for each doctor agent
     for task in tasks:
         task.description = task.description.format(question=state['question'])
     
-    # Sequentially processing of tasks by all doctor agents
-    crew = Crew(
-        agents=[t.agent for t in tasks], 
-        tasks=tasks,
-        process=Process.sequential
-    )
-    
-    # results = crew.kickoff()  # This results is not a list of results, but a single result from the last agent, check the Crew class
-    # answers = [result.raw_output for result in results] 
-    
-    crew.kickoff() # store the output of each task in corresponding task object
-    answers = [task.output.raw for task in tasks]
-
+        crew = Crew(
+            agents=[task.agent], 
+            tasks=[task]
+        )
+        
+        crew.kickoff() # store the output of each task in corresponding task object
+        initial_answers.append(task.output.raw)
+        
     # Unpack the current state and update the answers and round number
     new_state = {
         **state,
-        'answers': answers,
+        'answers': initial_answers,
         'round': state['round'] + 1
     }
     
@@ -52,11 +49,11 @@ def check_consensus_node(state: Dict[str, Any]) -> Dict[str, Any]:
     return new_state
 
 def generate_feedback_node(state: Dict[str, Any]) -> Dict[str, Any]:
-    agents = MedicalAgents()
+    agents = MedQAAgents()
     meta_agent = agents.meta_agent()
     
     # Generate feedback task for the meta agent
-    feedback_task = MedicalTasks(agents).feedback_task()
+    feedback_task = MedicalTasks(agents).feedback_task(state)
     
     feedback_task_crew = Crew(
         agents=[feedback_task.agent],
@@ -76,21 +73,23 @@ def generate_feedback_node(state: Dict[str, Any]) -> Dict[str, Any]:
     return new_state
 
 def refine_answers_node(state: Dict[str, Any]) -> Dict[str, Any]:
-    agents = MedicalAgents()
+    agents = MedQAAgents()
     tasks = MedicalTasks(agents).refinement_task(state['feedback'][-1])
     
-    crew = Crew(
-        agents=[t.agent for t in tasks],
-        tasks=tasks,
-        process=Process.sequential
-    )
-    
-    results = crew.kickoff()
-    answers = [result.raw_output for result in results]
+    refined_answers = []
+    for task in tasks:
+        
+        crew = Crew(
+            agents=[task.agent],
+            tasks=[task]
+        )
+        
+        crew.kickoff()
+        refined_answers.append(task.output.raw)
     
     new_state = {
         **state,
-        'answers': answers,
+        'answers': refined_answers,
         'round': state['round'] + 1
     }
     
