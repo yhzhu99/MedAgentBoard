@@ -1,6 +1,6 @@
 from crewai import Agent
 
-from ..utils import initialize_ds_model, initialize_gpt_model
+from medqa.utils import *
 
 class MedQAAgents:
     def __init__(self):
@@ -34,7 +34,6 @@ class MedQAAgents:
     def meta_agent(self) -> Agent:
         return Agent(
             role="Medical Consensus Coordinator",
-            goal="Evaluate and synthesize multiple medical opinions",
-            backstory="Expert in understanding and incorporating multiple medical opinions and making comprehensive clinical decision",
+            goal="Understand the answers from all doctors: If disagreements among doctors exist, identify key disagreements, and suggest focus areas for the next round of collaboration and refinement to reach a consensus among the doctors; If consensus is reached, summarize the agreed-upon answer and output the final brief answer",
             llm=self.deepseek
         )
