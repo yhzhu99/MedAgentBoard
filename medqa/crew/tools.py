@@ -11,4 +11,5 @@ class ConsensusTool:
     def check_consensus(self, answers: List[str]) -> bool:
         embeddings = self.model.encode(answers)
         similarity_matrix = cosine_similarity(embeddings)
-        return np.mean(similarity_matrix) >= self.threshold
+        print(similarity_matrix)
+        return np.all(similarity_matrix >= self.threshold)
