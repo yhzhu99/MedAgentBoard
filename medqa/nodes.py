@@ -104,17 +104,17 @@ def final_node(state: Dict[str, Any]) -> Dict[str, Any]:
     # Generate the finalized and consensually agreed answer
     if state['consensus_reached']:
         task_description = (
-            "Summarize final consensus from these answers:\n\n" +
+            "Based on the final consensus from the 3 doctors:\n\n" +
             "\n\n".join([f"Doctor {i+1}: {ans}" for i, ans in enumerate(state['answers'])]) +
-            "\n\nMake sure the output is simply the final answer/choice without any additional explanation."
+            "\n\nSimply give the final answer/choice without any additional explanation."
         )
         
     # Summarize all perspectives if consensus was not reached and choose the final answer by the majority vote
     else:
         task_description = (
-            "Summarize all perspectives after multiple rounds of discussion:\n\n" +
+            "Based on all perspectives after multiple rounds of discussion:\n\n" +
             "\n\n".join([f"Doctor {i+1}: {ans}" for i, ans in enumerate(state['answers'])]) +
-            "\n\nIf there is a clear majority opinion among the doctors, select it as the final answer. "
+            "\n\nIf there is a clear majority answer/choice among the doctors when disagreement persists among some doctors, select it as the final answer and simply give the final answer/choice without any additional explanation. "
             "Otherwise, provide a comprehensive summary of all perspectives."
         )
     
