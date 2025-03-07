@@ -32,7 +32,7 @@ class MedQAGraph:
         self.graph.add_conditional_edges(
             "check_consensus",
             # Go to "final" node if consensus is reached or max rounds are reached, otherwise go to "generate_feedback" node
-            lambda state: "final" if state['consensus_reached'] or state['round'] >= state['max_rounds'] else "generate_feedback"
+            lambda state: "final" if "true" in state['consensus_reached'].lower() or state['round'] >= state['max_rounds'] else "generate_feedback"
         )
         
         return self.graph.compile()

@@ -32,10 +32,18 @@ class MedQAAgents:
             llm=self.deepseek
         )
         
+    def moderator_agent(self) -> Agent:
+        return Agent(
+            role="Medical Discussion Moderator",
+            goal="Understand the answers from all doctors: If disagreements among doctors exist, identify key disagreements, and suggest focus areas for the next round of collaboration and refinement to reach a consensus among the doctors; If consensus is reached, summarize the agreed-upon answer and output the final brief answer",
+            backstory="A experienced moderator with a background in medical ethics and conflict resolution. They have facilitated numerous interdisciplinary rounds, ensuring respectful communication and shared decision-making. Their role is to synthesize diverse perspectives, clarify misunderstandings, and guide the team towards a unified conclusion.",
+            llm=self.deepseek
+        )
+    
     def meta_agent(self) -> Agent:
         return Agent(
             role="Medical Consensus Coordinator",
-            goal="Understand the answers from all doctors: If disagreements among doctors exist, identify key disagreements, and suggest focus areas for the next round of collaboration and refinement to reach a consensus among the doctors; If consensus is reached, summarize the agreed-upon answer and output the final brief answer",
-            backstory="A experienced moderator with a background in medical ethics and conflict resolution. They have facilitated numerous interdisciplinary rounds, ensuring respectful communication and shared decision-making. Their role is to synthesize diverse perspectives, clarify misunderstandings, and guide the team towards a unified conclusion.",
+            goal="Based on the answers from all doctors, determine if a consensus is reached (same answer to the question) or not. Return 'True' if consensus is reached, 'False' otherwise",
+            backstory="A experienced coordinator who can differentiate between consensus and disagreement. They have a background in medical ethics and conflict resolution.",
             llm=self.deepseek
         )

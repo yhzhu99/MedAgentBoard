@@ -26,12 +26,22 @@ class MedicalTasks:
             )
         ]
     
-    # Define the feedback task handled by the meta agent
+    # Define the consensus check task handled by the meta agent
+    def consensus_check_task(self, answers: List[str]) -> Task:
+        return Task(
+            description="Based on the answers from all doctors:\n\n{'='*20}\n" +
+                        "\n\n".join([f"Doctor {i+1}: {ans}" for i, ans in enumerate(answers)]) +
+                        "determine if a consensus is reached (same answer to the question) or not among the doctors",
+            agent=self.agents.meta_agent(),
+            expected_output="One-word output, nothing else: return 'True' if consensus is reached, return 'False' otherwise"
+        )
+    
+    # Define the feedback task handled by the moderator agent
     def feedback_task(self, state) -> Task:
         return Task(
             description="Analyze these answers and identify key disagreements:\n\n{'='*20}\n" +
                         "\n\n".join([f"Doctor {i+1}: {ans}" for i, ans in enumerate(state['answers'])]), # TODO:Rather than quoting each doctor as "Doctor i", use the role assigned to each doctor agent
-            agent=self.agents.meta_agent(),
+            agent=self.agents.moderator_agent(),
             expected_output="Summary of conflicting opinions and suggested focus areas for next round of collaboration and refinement to reach a consensus among the doctors"
         )
     
@@ -58,6 +68,6 @@ class MedicalTasks:
     def output_task(self, task_description: str) -> Task:
         return Task(
             description=task_description,
-            agent=self.agents.meta_agent(),
+            agent=self.agents.moderator_agent(),
             expected_output="Final consensually agreed answer which is simply a single choice, nothing else"
         )

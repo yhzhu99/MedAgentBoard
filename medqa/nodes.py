@@ -15,12 +15,12 @@ def generate_answers_node(state: Dict[str, Any]) -> Dict[str, Any]:
     for task in tasks:
         task.description = task.description.format(question=state['question'])
     
-        crew = Crew(
+        answer_crew = Crew(
             agents=[task.agent], 
             tasks=[task]
         )
         
-        crew.kickoff() # store the output of each task in corresponding task object
+        answer_crew.kickoff() # store the output of each task in corresponding task object
         initial_answers.append(task.output.raw)
         
     # Unpack the current state and update the answers and round number
@@ -36,8 +36,18 @@ def generate_answers_node(state: Dict[str, Any]) -> Dict[str, Any]:
     
 
 def check_consensus_node(state: Dict[str, Any]) -> Dict[str, Any]:
-    tool = ConsensusTool()
-    consensus = tool.check_consensus(state['answers'])
+    agents = MedQAAgents()
+    
+    consensus_task = MedicalTasks(agents).consensus_check_task(state['answers'])
+    
+    consensus_crew = Crew(
+        agents=[consensus_task.agent],
+        tasks=[consensus_task]
+    )
+    
+    consensus_crew.kickoff()
+    print(f"The output from the meta_agent is: {consensus_task.output.raw}")
+    consensus = consensus_task.output.raw
     
     new_state = {
         **state,
@@ -50,17 +60,16 @@ def check_consensus_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
 def generate_feedback_node(state: Dict[str, Any]) -> Dict[str, Any]:
     agents = MedQAAgents()
-    meta_agent = agents.meta_agent()
     
     # Generate feedback task for the meta agent
     feedback_task = MedicalTasks(agents).feedback_task(state)
     
-    feedback_task_crew = Crew(
+    feedback_crew = Crew(
         agents=[feedback_task.agent],
         tasks=[feedback_task]
     )
     
-    feedback_task_crew.kickoff()
+    feedback_crew.kickoff()
     feedback = feedback_task.output.raw
     
     new_state = {
@@ -79,12 +88,12 @@ def refine_answers_node(state: Dict[str, Any]) -> Dict[str, Any]:
     refined_answers = []
     for task in tasks:
         
-        crew = Crew(
+        refine_crew = Crew(
             agents=[task.agent],
             tasks=[task]
         )
         
-        crew.kickoff()
+        refine_crew.kickoff()
         refined_answers.append(task.output.raw)
     
     new_state = {
@@ -99,7 +108,6 @@ def refine_answers_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
 def final_node(state: Dict[str, Any]) -> Dict[str, Any]:
     agents = MedQAAgents()
-    meta_agent = agents.meta_agent()
     
     # Generate the finalized and consensually agreed answer
     if state['consensus_reached']:
@@ -120,12 +128,12 @@ def final_node(state: Dict[str, Any]) -> Dict[str, Any]:
     
     final_task = MedicalTasks(agents).output_task(task_description)
     
-    final_task_crew = Crew(
+    final_crew = Crew(
         agents=[final_task.agent],
         tasks=[final_task]
     )
     
-    final_task_crew.kickoff()
+    final_crew.kickoff()
     final_answer = final_task.output.raw
     
     new_state = {
