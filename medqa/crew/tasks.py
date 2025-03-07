@@ -69,5 +69,5 @@ class MedicalTasks:
         return Task(
             description=task_description,
             agent=self.agents.moderator_agent(),
-            expected_output="Final consensually agreed answer which is simply a single choice, nothing else"
+            expected_output="Final consensually agreed answer which is simply a single choice, nothing else, e.g., 'A'"
         )

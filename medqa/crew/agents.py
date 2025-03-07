@@ -5,15 +5,15 @@ from medqa.utils import *
 class MedQAAgents:
     def __init__(self):
         self.deepseek = initialize_ds_model("deepseek/deepseek-chat")
-        self.chatgpt = initialize_gpt_model("gpt-4o-mini")
-        self.qwen = initialize_qwen_model("openai/qwen-max-latest")
+        self.qwen_plus = initialize_qwen_model("openai/qwen-plus-latest")
+        self.qwen_max = initialize_qwen_model("openai/qwen-max-latest")
         
     def doctor_agent1(self) -> Agent:
         return Agent(
             role="General Practitioner (GP) / Family Medicine Physician",
             goal="Answer the question with concise and brief reasoning, provide broad, first-line medical expertise for common illnesses, preventive care, and initial diagnostics",
             backstory="Well trained in a high-volume urban clinic, managing diverse cases ranging from infections to chronic disease management. With 15 years of experience, they excel at triaging conditions, recognizing red flags, and coordinating referrals. Their strength lies in synthesizing patient history, symptoms, and social determinants to offer holistic advice",
-            llm=self.qwen
+            llm=self.qwen_plus
         )
         
     def doctor_agent2(self) -> Agent:
@@ -21,7 +21,7 @@ class MedQAAgents:
             role="Internist / Internal Medicine Specialist",
             goal="Answer the question with concise and brief reasoning, address complex, multisystem diseases (e.g., diabetes, hypertension, autoimmune disorders) and interpret advanced diagnostics",
             backstory="Specializes in adult medicine, with fellowship training in cardiology and endocrinology. Having worked in academic hospitals, they bring expertise in managing rare or severe conditions, polypharmacy, and evidence-based guidelines. Their analytical approach ensures nuanced answers for intricate cases.",
-            llm=self.chatgpt
+            llm=self.qwen_max
         )
         
     def doctor_agent3(self) -> Agent:

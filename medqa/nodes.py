@@ -114,7 +114,7 @@ def final_node(state: Dict[str, Any]) -> Dict[str, Any]:
         task_description = (
             "Based on the final consensus from the 3 doctors:\n\n" +
             "\n\n".join([f"Doctor {i+1}: {ans}" for i, ans in enumerate(state['answers'])]) +
-            "\n\nSimply give the final answer/choice without any additional explanation."
+            "\n\nSimply give the final choice without any additional explanation, e.g., 'A'"
         )
         
     # Summarize all perspectives if consensus was not reached and choose the final answer by the majority vote
@@ -122,8 +122,7 @@ def final_node(state: Dict[str, Any]) -> Dict[str, Any]:
         task_description = (
             "Based on all perspectives after multiple rounds of discussion:\n\n" +
             "\n\n".join([f"Doctor {i+1}: {ans}" for i, ans in enumerate(state['answers'])]) +
-            "\n\nIf there is a clear majority answer/choice among the doctors when disagreement persists among some doctors, select it as the final answer and simply give the final answer/choice without any additional explanation. "
-            "Otherwise, provide a comprehensive summary of all perspectives."
+            "\n\nIf there is a clear majority answer/choice among the doctors when disagreement persists among some doctors, select it as the final answer and simply give the final answer/choice without any additional explanation, e.g., 'A'"
         )
     
     final_task = MedicalTasks(agents).output_task(task_description)
