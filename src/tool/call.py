@@ -8,7 +8,7 @@ from tool.graph import run_graph
 class CodeToolInput(BaseModel):
     """Input schema for running workflow graph."""
     user_request: str = Field(..., description="The user's request or problem to solve")
-    data: dict = Field(..., description="Contextual data needed to process the request")
+    data: Any = Field(..., description="Contextual data needed to process the request")
 
 class CodeTool(BaseTool):
     name: str = "Code Tool"
