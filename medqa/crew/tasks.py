@@ -11,7 +11,9 @@ class MedicalTasks:
         return [
             Task(
                 description='''
-                Answer the {question} and note the following instructions before providing the answer:
+                Answer the question: 
+                {question}, 
+                and note the following instructions before providing the answer:
                 [ROLE] Senior Family Physician with 15 years urban clinic experience
                 [FOCUS] Prioritize common conditions (80% prevalence) before considering rare diagnoses. Always assess for red flags requiring emergency care. Consider practical constraints (limited testing availability, patient compliance). Highlight cost-effective first-line interventions and preventive measures.
                 [REASONING FRAMEWORK]
@@ -22,12 +24,14 @@ class MedicalTasks:
                 5. Recommend stepwise management: Lifestyle > OTC meds > Prescriptions
                 ''',
                 agent=self.agents.doctor_agent1(),
-                expected_output= "Give one single answer and choice with brief reasoning and explanation as a Senior Family Physician with 15 years urban clinic experience."
+                expected_output= "Give one single answer and choice with brief reasoning and explanation (and why other options are wrong) as a Senior Family Physician with 15 years urban clinic experience. Begin your answer with 'As a Senior Family Physician with 15 years urban clinic experience, I would choose...'"
     
             ),
             Task(
                 description='''
-                Answer the {question} and note the following instructions before providing the answer:
+                Answer the question 
+                {question}, 
+                and note the following instructions before providing the answer:
                 [ROLE] Academic Hospital Internist specializing in complex multimorbidity
                 [FOCUS] Identify atypical presentations of systemic diseases. Analyze potential drug interactions. Consider secondary/tertiary prevention strategies. Evaluate diagnostic uncertainty through Bayesian analysis.
                 [REASONING FRAMEWORK]
@@ -38,12 +42,14 @@ class MedicalTasks:
                 5. Weigh risks/benefits of advanced imaging or invasive testing
                 ''',
                 agent=self.agents.doctor_agent2(),
-                expected_output="Give one single answer and choice with brief reasoning and explanation as a Academic Hospital Internist specializing in complex multimorbidity."
+                expected_output="Give one single answer and choice with brief reasoning and explanation (and why other options are wrong) as a Academic Hospital Internist specializing in complex multimorbidity. Begin your answer with 'As an Academic Hospital Internist specializing in complex multimorbidity, I would choose...'"
             ),
             Task(
                 description=
                 '''
-                Answer the {question} and note the following instructions before providing the answer:
+                Answer the question: 
+                {question}, 
+                and note the following instructions before providing the answer:
                 [ROLE] Board-Certified Pediatrician with Neonatology/Adolescent Medicine Expertise  
                 [FOCUS] Prioritize developmental appropriateness in all assessments. Consider growth patterns, vaccine status, and family/caregiver capabilities. Distinguish between normal developmental variations and pathological findings.
                 [REASONING FRAMEWORK]  
@@ -54,7 +60,7 @@ class MedicalTasks:
                 5. **Family Dynamics**: Apply HEADSSS assessment (Home, Education, etc.) for adolescents 
                 ''',
                 agent=self.agents.doctor_agent3(),
-                expected_output="Give one single answer and choice with brief reasoning and explanation as a Board-Certified Pediatrician with Neonatology/Adolescent Medicine Expertise ."
+                expected_output="Give one single answer and choice with brief reasoning and explanation (and why other options are wrong) as a Board-Certified Pediatrician with Neonatology/Adolescent Medicine Expertise. Begin your answer with 'As a Board-Certified Pediatrician with Neonatology/Adolescent Medicine Expertise, I would choose...'"
                 
             )
         ]
@@ -73,28 +79,28 @@ class MedicalTasks:
     def feedback_task(self, state) -> Task:
         return Task(
             description="Analyze these answers and identify key disagreements:\n\n{'='*20}\n" +
-                        "\n\n".join([f"Doctor {i+1}: {ans}" for i, ans in enumerate(state['answers'])]), # TODO:Rather than quoting each doctor as "Doctor i", use the role assigned to each doctor agent
+                        "\n\n".join([f"Doctor {i+1}: {ans}" for i, ans in enumerate(state['current_answers'])]), # TODO:Rather than quoting each doctor as "Doctor i", use the role assigned to each doctor agent
             agent=self.agents.moderator_agent(),
             expected_output="Summary of conflicting opinions among the doctors"
         )
     
     # Define the refinement task handled by each doctor agent given the feedback
-    def refinement_task(self, feedback: str) -> List[Task]:
+    def refinement_task(self, question: str, previous_answers: list, feedback: str) -> List[Task]:
         return [
             Task(
-                description=f"{{question}}\n\nYou are doctor 1, here is the feedback from previous round of discussion with other doctors:\n{feedback}", # TODO: Add previous answers?
+                description=f"Answer the question:\n{question}\nYou are doctor 1, your answer and reasoning to the question in the previous round is:\n{previous_answers[0]}\nAnd here is the feedback from previous round of discussion with other doctors:\n{feedback}",
                 agent=self.agents.doctor_agent1(),
-                expected_output="Give one single revised answer/choice with brief reasoning and explanation according to the feedback"
+                expected_output="Give one single revised answer/choice with brief reasoning and explanation according to the feedback, your previous answer and your role and expertise"
             ),
             Task(
-                description=f"{{question}}\n\nYou are doctor 2, here is the feedback from previous round of discussion with other doctors:\n{feedback}",
+                description=f"Answer the question:\n{question}\nYou are doctor 2, your answer and reasoning to the question in the previous round is:\n{previous_answers[0]}\nAnd here is the feedback from previous round of discussion with other doctors:\n{feedback}",
                 agent=self.agents.doctor_agent2(),
-                expected_output="Give one single revised answer/choice with brief reasoning and explanation according to the feedback"
+                expected_output="Give one single revised answer/choice with brief reasoning and explanation according to the feedback, your previous answer and your role and expertise"
             ),
             Task(
-                description=f"{{question}}\n\nYou are doctor 3, here is the feedback from previous round of discussion with other doctors:\n{feedback}",
+                description=f"Answer the question:\n{question}\nYou are doctor 3, your answer and reasoning to the question in the previous round is:\n{previous_answers[0]}\nAnd here is the feedback from previous round of discussion with other doctors:\n{feedback}",
                 agent=self.agents.doctor_agent3(),
-                expected_output="Give one single revised answer/choice with brief reasoning and explanation according to the feedback of previous round"
+                expected_output="Give one single revised answer/choice with brief reasoning and explanation according to the feedback, your previous answer and your role and expertise"
             )
         ]
         

@@ -5,7 +5,7 @@ from medqa.state import AnswerState
 from medqa.utils import log_state_change
 from typing import Dict, Any
 
-def generate_answers_node(state: Dict[str, Any]) -> Dict[str, Any]:
+def initial_answers_node(state: Dict[str, Any]) -> Dict[str, Any]:
     agents = MedQAAgents()
     tasks = MedicalTasks(agents).initial_answer_task() # Each task corresponds to a different doctor agent
     
@@ -25,7 +25,7 @@ def generate_answers_node(state: Dict[str, Any]) -> Dict[str, Any]:
     # Unpack the current state and update the answers and round number
     new_state = {
         **state,
-        'answers': initial_answers,
+        'current_answers': initial_answers,
         'round': state['round'] + 1
     }
     
@@ -37,7 +37,7 @@ def generate_answers_node(state: Dict[str, Any]) -> Dict[str, Any]:
 def check_consensus_node(state: Dict[str, Any]) -> Dict[str, Any]:
     agents = MedQAAgents()
     
-    consensus_task = MedicalTasks(agents).consensus_check_task(state['answers'])
+    consensus_task = MedicalTasks(agents).consensus_check_task(state['current_answers'])
     
     consensus_crew = Crew(
         agents=[consensus_task.agent],
@@ -73,6 +73,7 @@ def generate_feedback_node(state: Dict[str, Any]) -> Dict[str, Any]:
     
     new_state = {
         **state,
+        'previous_answers': state['current_answers'],
         'feedback': state['feedback'] + [feedback]
     }
     
@@ -82,7 +83,7 @@ def generate_feedback_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
 def refine_answers_node(state: Dict[str, Any]) -> Dict[str, Any]:
     agents = MedQAAgents()
-    tasks = MedicalTasks(agents).refinement_task(state['feedback'][-1])
+    tasks = MedicalTasks(agents).refinement_task(state['question'],state['previous_answers'],state['feedback'][-1])
     
     refined_answers = []
     for task in tasks:
@@ -97,7 +98,7 @@ def refine_answers_node(state: Dict[str, Any]) -> Dict[str, Any]:
     
     new_state = {
         **state,
-        'answers': refined_answers,
+        'current_answers': refined_answers,
         'round': state['round'] + 1
     }
     
@@ -112,7 +113,7 @@ def final_node(state: Dict[str, Any]) -> Dict[str, Any]:
     if state['consensus_reached']:
         task_description = (
             "Based on the final consensus from the 3 doctors:\n\n" +
-            "\n\n".join([f"Doctor {i+1}: {ans}" for i, ans in enumerate(state['answers'])]) +
+            "\n\n".join([f"Doctor {i+1}: {ans}" for i, ans in enumerate(state['current_answers'])]) +
             "\n\nSimply give the final choice without any additional explanation, e.g., 'A'"
         )
         
@@ -120,7 +121,7 @@ def final_node(state: Dict[str, Any]) -> Dict[str, Any]:
     else:
         task_description = (
             "Based on all perspectives after multiple rounds of discussion:\n\n" +
-            "\n\n".join([f"Doctor {i+1}: {ans}" for i, ans in enumerate(state['answers'])]) +
+            "\n\n".join([f"Doctor {i+1}: {ans}" for i, ans in enumerate(state['current_answers'])]) +
             "\n\nIf there is a clear majority answer/choice among the doctors when disagreement persists among some doctors, select it as the final answer and simply give the final answer/choice without any additional explanation, e.g., 'A'"
         )
     

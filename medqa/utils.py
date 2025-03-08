@@ -42,7 +42,7 @@ def log_state_change(old_state, new_state):
         with open('collaboration_log.txt', 'a') as f:
             f.write(f"<Round {new_state['round']}>:\n")
             f.write("\nAnswers from each agent:\n\n")
-            for i, answer in enumerate(new_state['answers']):
+            for i, answer in enumerate(new_state['current_answers']):
                 f.write(f"Doctor {i+1}: {answer}\n\n")
     
     # Log consensus status

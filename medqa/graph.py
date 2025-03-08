@@ -1,7 +1,7 @@
 from langgraph.graph import StateGraph
 from medqa.state import AnswerState
 from medqa.nodes import (
-    generate_answers_node,
+    initial_answers_node,
     check_consensus_node,
     generate_feedback_node,
     refine_answers_node,
@@ -15,7 +15,7 @@ class MedQAGraph:
         self.max_rounds = max_rounds
         
     def build_graph(self):
-        self.graph.add_node("generate_answers", generate_answers_node)
+        self.graph.add_node("generate_answers", initial_answers_node)
         self.graph.add_node("check_consensus", check_consensus_node)
         self.graph.add_node("generate_feedback", generate_feedback_node)
         self.graph.add_node("refine_answers", refine_answers_node)
@@ -42,7 +42,8 @@ class MedQAGraph:
             'question': self.question,
             'round': 0,
             'max_rounds': self.max_rounds,
-            'answers': [],
+            'previous_answers': [],
+            'current_answers': [],
             'feedback': [],
             'consensus_reached': False,
             'final_answer': None
