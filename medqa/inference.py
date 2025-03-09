@@ -8,11 +8,12 @@ from medqa.graph import MedQAGraph
 # logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s")
 
 # Run the inference: python -m medqa.inference
-def inference(question: str, max_rounds: int = 5):
+def inference(question: str, max_rounds: int = 2):
+    log = {}
     qa_graph = MedQAGraph(question, max_rounds=max_rounds)
-    final_answer = qa_graph.run()
+    final_answer, log = qa_graph.run()
     
-    return final_answer
+    return final_answer, log
 
 def format_question(question: str, options: list):
     return f"{question}\n\n + {options}"

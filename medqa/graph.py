@@ -46,9 +46,10 @@ class MedQAGraph:
             'current_answers': [],
             'feedback': [],
             'consensus_reached': False,
-            'final_answer': None
+            'final_answer': None,
+            'log': {}
         }
         
         app = self.build_graph()
         result = app.invoke(initial_state)
-        return result['final_answer']
+        return result['final_answer'], result['log']

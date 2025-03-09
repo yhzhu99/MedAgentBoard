@@ -4,6 +4,7 @@ from medqa.crew.agents import MedQAAgents
 from medqa.state import AnswerState
 from medqa.utils import log_state_change
 from typing import Dict, Any
+import copy
 
 def initial_answers_node(state: Dict[str, Any]) -> Dict[str, Any]:
     agents = MedQAAgents()
@@ -22,14 +23,21 @@ def initial_answers_node(state: Dict[str, Any]) -> Dict[str, Any]:
         answer_crew.kickoff() # store the output of each task in corresponding task object
         initial_answers.append(task.output.raw)
         
+    # Log the state change to track the flow of the multi-agent collaboration
+    current_round = state['round'] + 1
+    new_log = copy.deepcopy(state['log'])
+    new_log["Question"] = state['question']
+    new_log[f"Round {current_round}"] = {
+        'question_prompts': [task.description for task in tasks],
+        'answers': initial_answers
+    }                                   
     # Unpack the current state and update the answers and round number
     new_state = {
         **state,
         'current_answers': initial_answers,
-        'round': state['round'] + 1
+        'round': current_round,
+        'log': new_log
     }
-    
-    log_state_change(state, new_state) # Log the state change to track the flow of the multi-agent collaboration
     
     return new_state
     
@@ -48,12 +56,18 @@ def check_consensus_node(state: Dict[str, Any]) -> Dict[str, Any]:
     print(f"The output from the meta_agent is: {consensus_task.output.raw}")
     consensus = consensus_task.output.raw
     
+    current_round = state['round']
+    new_log = copy.deepcopy(state['log'])
+    new_log[f"Round {current_round}"].update({
+        'consensus_prompt': consensus_task.description,
+        'consensus': consensus,
+    })
+    
     new_state = {
         **state,
-        'consensus_reached': consensus
+        'consensus_reached': consensus,
+        'log': new_log
     }
-    
-    log_state_change(state, new_state)
     
     return new_state
 
@@ -71,19 +85,25 @@ def generate_feedback_node(state: Dict[str, Any]) -> Dict[str, Any]:
     feedback_crew.kickoff()
     feedback = feedback_task.output.raw
     
+    current_round = state['round']
+    new_log = copy.deepcopy(state['log'])
+    new_log[f"Round {current_round}"].update({
+        'feedback_prompt': feedback_task.description,
+        'feedback': feedback
+    })
+    
     new_state = {
         **state,
         'previous_answers': state['current_answers'],
-        'feedback': state['feedback'] + [feedback]
+        'feedback': feedback,
+        'log': new_log
     }
-    
-    log_state_change(state, new_state)
     
     return new_state
 
 def refine_answers_node(state: Dict[str, Any]) -> Dict[str, Any]:
     agents = MedQAAgents()
-    tasks = MedicalTasks(agents).refinement_task(state['question'],state['previous_answers'],state['feedback'][-1])
+    tasks = MedicalTasks(agents).refinement_task(state['question'],state['previous_answers'],state['feedback'])
     
     refined_answers = []
     for task in tasks:
@@ -96,13 +116,19 @@ def refine_answers_node(state: Dict[str, Any]) -> Dict[str, Any]:
         refine_crew.kickoff()
         refined_answers.append(task.output.raw)
     
+    new_round = state['round'] + 1
+    new_log = copy.deepcopy(state['log'])
+    new_log[f"Round {new_round}"] = {
+        'question_prompts': [task.description for task in tasks],
+        'answers': refined_answers
+    }
+    
     new_state = {
         **state,
         'current_answers': refined_answers,
-        'round': state['round'] + 1
+        'round': new_round,
+        'log': new_log
     }
-    
-    log_state_change(state, new_state)
     
     return new_state
 
@@ -135,9 +161,16 @@ def final_node(state: Dict[str, Any]) -> Dict[str, Any]:
     final_crew.kickoff()
     final_answer = final_task.output.raw
     
+    new_log = copy.deepcopy(state['log'])
+    new_log[f"Final"] = {
+        'final_prompt': final_task.description,
+        "final_answer": final_answer
+    }
+    
     new_state = {
         **state,
-        'final_answer': final_answer
+        'final_answer': final_answer,
+        'log': new_log
     }
     
     log_state_change(state, new_state)
