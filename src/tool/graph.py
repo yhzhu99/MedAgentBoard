@@ -49,7 +49,8 @@ def code_generator(state: WorkflowState) -> dict:
     # 根据不同attempt次数设计不同的prompt
     if state['attempts'] == 0:
         if state['data'] is not None:
-            prompt_input = code_generator_prompt2.format(request = state['request'], data_type = str(type(state['data'])), data_example = state['data'].to_string(max_rows=None, max_cols=None, max_colwidth=None)[:5000])
+            # prompt_input = code_generator_prompt2.format(request = state['request'], data_type = str(type(state['data'])), data_example = state['data'].to_string(max_rows=None, max_cols=None, max_colwidth=None)[:5000])
+            prompt_input = code_generator_prompt2.format(request = state['request'], data_type = str(type(state['data'])), data_example = str(state['data']))
         else:
             prompt_input = code_generator_prompt.format(request = state['request'])
         print('prompt_input:', prompt_input)
