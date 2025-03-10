@@ -70,17 +70,17 @@ class MedicalTasks:
     def refinement_task(self, question: str, previous_answers: list, feedback: str) -> List[Task]:
         return [
             Task(
-                description=f"Answer the question:\n{question}\nYou are doctor 1, your answer and reasoning to the question in the previous round is:\n{previous_answers[0]}\nAnd here is the feedback from previous round of discussion with other doctors:\n{feedback}",
+                description=f"Answer the question:\n'{question}'\nYou are doctor 1, your answer and reasoning to the question in the previous round is:\n'{previous_answers[0]}'\nAnd here is the feedback from previous round of discussion with other doctors:\n'{feedback}'",
                 agent=self.agents.doctor_agent1(),
                 expected_output="Give one single revised answer/choice with brief reasoning and explanation according to the feedback, your previous answer and your role and expertise"
             ),
             Task(
-                description=f"Answer the question:\n{question}\nYou are doctor 2, your answer and reasoning to the question in the previous round is:\n{previous_answers[1]}\nAnd here is the feedback from previous round of discussion with other doctors:\n{feedback}",
+                description=f"Answer the question:\n'{question}'\nYou are doctor 2, your answer and reasoning to the question in the previous round is:\n'{previous_answers[1]}'\nAnd here is the feedback from previous round of discussion with other doctors:\n'{feedback}'",
                 agent=self.agents.doctor_agent2(),
                 expected_output="Give one single revised answer/choice with brief reasoning and explanation according to the feedback, your previous answer and your role and expertise"
             ),
             Task(
-                description=f"Answer the question:\n{question}\nYou are doctor 3, your answer and reasoning to the question in the previous round is:\n{previous_answers[2]}\nAnd here is the feedback from previous round of discussion with other doctors:\n{feedback}",
+                description=f"Answer the question:\n'{question}'\nYou are doctor 3, your answer and reasoning to the question in the previous round is:\n'{previous_answers[2]}'\nAnd here is the feedback from previous round of discussion with other doctors:\n'{feedback}'",
                 agent=self.agents.doctor_agent3(),
                 expected_output="Give one single revised answer/choice with brief reasoning and explanation according to the feedback, your previous answer and your role and expertise"
             )
