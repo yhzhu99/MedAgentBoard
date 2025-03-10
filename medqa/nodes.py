@@ -2,7 +2,7 @@ from crewai import Crew, Process
 from medqa.crew.tasks import MedicalTasks
 from medqa.crew.agents import MedQAAgents
 from medqa.state import AnswerState
-from medqa.utils import log_state_change
+# from medqa.utils import log_state_change
 from typing import Dict, Any
 import copy
 
@@ -172,7 +172,5 @@ def final_node(state: Dict[str, Any]) -> Dict[str, Any]:
         'final_answer': final_answer,
         'log': new_log
     }
-    
-    log_state_change(state, new_state)
     
     return new_state

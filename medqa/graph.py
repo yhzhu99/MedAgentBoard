@@ -51,5 +51,14 @@ class MedQAGraph:
         }
         
         app = self.build_graph()
-        result = app.invoke(initial_state)
-        return result['final_answer'], result['log']
+        retries = 0
+        
+        while retries < 3:
+            try:
+                result = app.invoke(initial_state)
+                return result['final_answer'], result['log']
+            except Exception as e:
+                retries += 1
+                print(f"Error: {e}. Retrying...")
+                
+        return "API error", "API error"
