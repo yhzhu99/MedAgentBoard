@@ -16,7 +16,7 @@ def inference(question: str, max_rounds: int = 5):
     return final_answer, log
 
 def format_question(question: str, options: list):
-    return f"{question}\n\n + {options}"
+    return f"Question: {question}; Options: {options}"
 
 if __name__ == "__main__":
     
