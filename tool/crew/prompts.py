@@ -52,6 +52,7 @@ class judge_output_format(BaseModel):
 
 code_output_reviewer_prompt = """
     请根据用户需求，检查答案形式是否与用户需求相符。不需要检查答案具体数值是否正确，只检查答案形式正确还是错误.
+    只能返回一个单词'yes'或'no'，'yes'代表答案形式与用户需求相符，'no'代表答案形式与用户需求不符。
     
     用户需求：{request}
     答案：{output}
