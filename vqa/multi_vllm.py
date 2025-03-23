@@ -177,6 +177,8 @@ class DoctorAgent(BaseAgent):
         """
         super().__init__(agent_id, AgentType.DOCTOR, model_key)
         self.specialty = specialty
+        # 新增：维护医生的决策历史记忆
+        self.memory = []
         logger.info(f"初始化{specialty.value}医生智能体，ID: {agent_id}")
     
     def analyze_case(self, 
@@ -244,11 +246,24 @@ class DoctorAgent(BaseAgent):
         try:
             result = json.loads(response_text)
             logger.info(f"医生 {self.agent_id} 响应成功解析")
+            # 添加到记忆中
+            self.memory.append({
+                "type": "analysis",
+                "round": len(self.memory) // 2 + 1,
+                "content": result
+            })
             return result
         except json.JSONDecodeError:
             # 如果JSON格式不正确，使用备用解析
             logger.warning(f"医生 {self.agent_id} 响应不是有效JSON，使用备用解析")
-            return parse_structured_output(response_text)
+            result = parse_structured_output(response_text)
+            # 添加到记忆中
+            self.memory.append({
+                "type": "analysis",
+                "round": len(self.memory) // 2 + 1,
+                "content": result
+            })
+            return result
     
     def review_synthesis(self, 
                          image_path: str,
@@ -270,13 +285,24 @@ class DoctorAgent(BaseAgent):
         logger.info(f"医生 {self.agent_id} ({self.specialty.value}) 正在审查综合结果")
         base64_image = encode_image(image_path)
         
+        # 获取当前轮次
+        current_round = len(self.memory) // 2 + 1
+        
+        # 获取医生自己的最近分析
+        own_analysis = None
+        for mem in reversed(self.memory):
+            if mem["type"] == "analysis":
+                own_analysis = mem["content"]
+                break
+        
         # 准备审查的系统消息
         system_message = {
             "role": "system",
-            "content": f"你是一名专攻{self.specialty.value}的医生。"
+            "content": f"你是一名专攻{self.specialty.value}的医生，正在参与第{current_round}轮多学科团队会诊。"
                       f"请审查多个医生意见的综合结果，并确定你是否同意该结论。"
-                      f"你的输出应为JSON格式，包含'agree'(布尔值)、'reason'(你的决定理由)，"
-                      f"以及'alternative_answer'(仅当你不同意时)字段。"
+                      f"考虑你之前的分析和MetaAgent的综合意见，决定是否同意或提出不同意见。"
+                      f"你的输出应为JSON格式，包含'agree'(布尔值或'yes'/'no')、'reason'(你的决定理由)，"
+                      f"以及'answer'(如果不同意，提供你的建议答案；如果同意，可以重复综合答案)字段。"
         }
         
         # 准备包含综合结果的用户消息
@@ -294,15 +320,23 @@ class DoctorAgent(BaseAgent):
         else:
             prompt_with_options = prompt
         
+        # 准备包含自己之前分析的文本
+        own_analysis_text = ""
+        if own_analysis:
+            own_analysis_text = f"你的先前分析:\n解释: {own_analysis.get('explanation', '')}\n答案: {own_analysis.get('answer', '')}\n\n"
+        
         synthesis_text = f"综合解释: {synthesis.get('explanation', '')}\n"
         synthesis_text += f"建议答案: {synthesis.get('answer', '')}"
         
         user_content.append({
             "type": "text", 
             "text": f"原始问题: {prompt_with_options}\n\n"
+                  f"{own_analysis_text}"
                   f"{synthesis_text}\n\n"
-                  f"你是否同意这个综合结果？请以JSON格式提供回答，包含'agree'(true/false)、"
-                  f"'reason'(你的理由)，以及'alternative_answer'(仅当你不同意时)字段。"
+                  f"你是否同意这个综合结果？请以JSON格式提供回答，包含:\n"
+                  f"1. 'agree': 'yes'/'no'\n"
+                  f"2. 'reason': 你同意或不同意的理由\n"
+                  f"3. 'answer': 你支持的答案（如果同意可以是综合答案，如果不同意需要提供你的建议答案）"
         })
         
         user_message = {
@@ -317,6 +351,17 @@ class DoctorAgent(BaseAgent):
         try:
             result = json.loads(response_text)
             logger.info(f"医生 {self.agent_id} 审查成功解析")
+            
+            # 标准化agree字段
+            if isinstance(result.get("agree"), str):
+                result["agree"] = result["agree"].lower() in ["true", "yes", "是", "同意"]
+            
+            # 添加到记忆中
+            self.memory.append({
+                "type": "review",
+                "round": current_round,
+                "content": result
+            })
             return result
         except json.JSONDecodeError:
             # 备用解析
@@ -326,18 +371,30 @@ class DoctorAgent(BaseAgent):
             
             for line in lines:
                 if "agree" in line.lower():
-                    result["agree"] = "true" in line.lower() or "yes" in line.lower()
+                    result["agree"] = "true" in line.lower() or "yes" in line.lower() or "是" in line.lower() or "同意" in line.lower()
                 elif "reason" in line.lower():
                     result["reason"] = line.split(":", 1)[1].strip() if ":" in line else line
-                elif "alternative" in line.lower():
-                    result["alternative_answer"] = line.split(":", 1)[1].strip() if ":" in line else line
+                elif "answer" in line.lower():
+                    result["answer"] = line.split(":", 1)[1].strip() if ":" in line else line
             
             # 确保必填字段
             if "agree" not in result:
                 result["agree"] = False
             if "reason" not in result:
                 result["reason"] = "未提供理由"
+            if "answer" not in result:
+                # 默认使用自己之前的答案或者综合答案
+                if own_analysis and "answer" in own_analysis:
+                    result["answer"] = own_analysis["answer"]
+                else:
+                    result["answer"] = synthesis.get("answer", "未提供答案")
             
+            # 添加到记忆中
+            self.memory.append({
+                "type": "review",
+                "round": current_round,
+                "content": result
+            })
             return result
 
 
@@ -360,6 +417,7 @@ class MetaAgent(BaseAgent):
                            prompt: str,
                            doctor_opinions: List[Dict[str, Any]],
                            doctor_specialties: List[MedicalSpecialty],
+                           current_round: int = 1,
                            options: Optional[List[str]] = None) -> Dict[str, Any]:
         """
         综合多个医生意见。
@@ -369,20 +427,21 @@ class MetaAgent(BaseAgent):
             prompt: 原始问题
             doctor_opinions: 医生意见列表
             doctor_specialties: 对应的医生专科列表
+            current_round: 当前讨论轮次
             options: 可选的多选项选项
             
         返回:
             包含综合解释和答案的字典
         """
-        logger.info("元智能体正在综合意见")
+        logger.info(f"元智能体正在综合第{current_round}轮意见")
         base64_image = encode_image(image_path)
         
         # 准备用于综合的系统消息
         system_message = {
             "role": "system",
-            "content": "你是一名医疗共识协调者。"
-                      "请将多个医生意见综合成一个连贯的分析和结论。"
-                      "考虑每位医生的专业知识，并相应地权衡他们的意见。"
+            "content": f"你是一名医疗共识协调者，正在主持第{current_round}轮多学科团队会诊。"
+                      "请将多个专科医生的意见综合成一个连贯的分析和结论。"
+                      "考虑每位医生的专业知识和观点，并相应地权衡他们的意见。"
                       "你的输出应为JSON格式，包含'explanation'(推理综合)和"
                       "'answer'(共识结论)字段。"
         }
@@ -421,7 +480,7 @@ class MetaAgent(BaseAgent):
         user_content.append({
             "type": "text", 
             "text": f"问题: {prompt_with_options}\n\n"
-                  f"医生意见:\n{opinions_text}\n\n"
+                  f"第{current_round}轮医生意见:\n{opinions_text}\n\n"
                   f"请将这些意见综合成一个共识观点。以JSON格式提供你的综合，包含"
                   f"'explanation'(全面推理)和'answer'(明确结论)字段。"
         })
@@ -450,6 +509,8 @@ class MetaAgent(BaseAgent):
                            doctor_reviews: List[Dict[str, Any]],
                            doctor_specialties: List[MedicalSpecialty],
                            current_synthesis: Dict[str, Any],
+                           current_round: int,
+                           max_rounds: int,
                            options: Optional[List[str]] = None) -> Dict[str, Any]:
         """
         基于医生审查做出最终决定。
@@ -460,26 +521,42 @@ class MetaAgent(BaseAgent):
             doctor_reviews: 医生审查列表
             doctor_specialties: 对应的医生专科列表
             current_synthesis: 当前综合结果
+            current_round: 当前轮次
+            max_rounds: 最大轮次
             options: 可选的多选项选项
             
         返回:
             包含最终解释和答案的字典
         """
-        logger.info("元智能体正在做出最终决定")
+        logger.info(f"元智能体正在做出第{current_round}轮决定")
         base64_image = encode_image(image_path)
         
         # 检查所有医生是否都同意
         all_agree = all(review.get('agree', False) for review in doctor_reviews)
+        reached_max_rounds = current_round >= max_rounds
         
         # 准备最终决定的系统消息
         system_message = {
             "role": "system",
             "content": "你是一名做出最终决定的医疗共识协调者。"
-                      f"{'所有医生都同意你的综合结果。' if all_agree else '并非所有医生都同意你的综合结果。'} "
-                      "请考虑所有反馈做出最终决定。"
-                      "你的输出应为JSON格式，包含'explanation'(最终推理)和"
-                      "'answer'(最终结论)字段。"
         }
+        
+        if all_agree:
+            system_message["content"] += "所有医生都同意你的综合结果，请生成最终报告。"
+        elif reached_max_rounds:
+            system_message["content"] += (
+                f"已达到最大讨论轮数({max_rounds}轮)，但仍未达成完全共识。"
+                f"请使用多数意见方法做出最终决定。"
+            )
+        else:
+            system_message["content"] += (
+                "并非所有医生都同意你的综合结果，但需要给出当前轮次的决定。"
+            )
+        
+        system_message["content"] += (
+            "你的输出应为JSON格式，包含'explanation'(最终推理)和"
+            "'answer'(最终结论)字段。"
+        )
         
         # 对于多选题，指示选择一个选项
         if options:
@@ -493,8 +570,7 @@ class MetaAgent(BaseAgent):
             formatted_review = f"医生 {i+1} ({specialty.value}):\n"
             formatted_review += f"同意: {'是' if review.get('agree', False) else '否'}\n"
             formatted_review += f"理由: {review.get('reason', '')}\n"
-            if not review.get('agree', False) and 'alternative_answer' in review:
-                formatted_review += f"替代答案: {review.get('alternative_answer', '')}\n"
+            formatted_review += f"答案: {review.get('answer', '')}\n"
             formatted_reviews.append(formatted_review)
         
         reviews_text = "\n".join(formatted_reviews)
@@ -519,12 +595,14 @@ class MetaAgent(BaseAgent):
             f"当前建议答案: {current_synthesis.get('answer', '')}"
         )
         
+        decision_type = "最终" if all_agree or reached_max_rounds else "当前轮次"
+        
         user_content.append({
             "type": "text", 
             "text": f"问题: {prompt_with_options}\n\n"
                   f"{current_synthesis_text}\n\n"
                   f"医生审查:\n{reviews_text}\n\n"
-                  f"基于{'共识' if all_agree else '反馈'}，请提供你的最终决定，"
+                  f"请提供你的{decision_type}决定，"
                   f"以JSON格式，包含'explanation'和'answer'字段。"
         })
         
@@ -636,11 +714,11 @@ class MDTConsultation:
         }
         self.consultation_history.append(case_history)
         
-        consensus_reached = False
-        current_synthesis = None
         current_round = 0
+        final_decision = None
+        consensus_reached = False
         
-        while not consensus_reached and current_round < self.max_rounds:
+        while current_round < self.max_rounds and not consensus_reached:
             current_round += 1
             logger.info(f"开始第 {current_round} 轮")
             
@@ -663,9 +741,9 @@ class MDTConsultation:
             # 步骤2: 元智能体综合意见
             logger.info("元智能体正在综合意见")
             synthesis = self.meta_agent.synthesize_opinions(
-                image_path, prompt, doctor_opinions, self.doctor_specialties, options
+                image_path, prompt, doctor_opinions, self.doctor_specialties, 
+                current_round, options
             )
-            current_synthesis = synthesis
             round_data["synthesis"] = synthesis
             
             logger.info(f"元智能体综合: {synthesis.get('answer', '')}")
@@ -691,20 +769,28 @@ class MDTConsultation:
             # 将回合数据添加到历史记录
             case_history["rounds"].append(round_data)
             
+            # 步骤4: 元智能体根据审查做出决定
+            decision = self.meta_agent.make_final_decision(
+                image_path, prompt, doctor_reviews, self.doctor_specialties, 
+                synthesis, current_round, self.max_rounds, options
+            )
+            
             # 检查是否达成共识
             if all_agree:
                 consensus_reached = True
+                final_decision = decision
                 logger.info("达成共识")
             else:
                 logger.info("未达成共识，继续下一轮")
-        
-        # 元智能体做出最终决定
-        logger.info("元智能体正在做出最终决定")
-        final_decision = self.meta_agent.make_final_decision(
-            image_path, prompt, doctor_reviews, self.doctor_specialties, current_synthesis, options
-        )
+                if current_round == self.max_rounds:
+                    # 如果已达到最大轮次，使用最后一轮的决定作为最终决定
+                    final_decision = decision
         
         # 将最终决定添加到历史记录
+        if not final_decision:
+            # 如果没有达到共识但用完了轮次，使用最后一轮的决定
+            final_decision = decision
+        
         case_history["final_decision"] = final_decision
         case_history["consensus_reached"] = consensus_reached
         case_history["total_rounds"] = current_round
