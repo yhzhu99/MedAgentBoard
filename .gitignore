@@ -1,3 +1,7 @@
+my_datasets/
+*.json
+test_img.jpg
+
 # TEMP FILES
 inf.sh
 
