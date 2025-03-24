@@ -173,7 +173,7 @@ class DoctorAgent(BaseAgent):
         """
         super().__init__(agent_id, AgentType.DOCTOR, model_key)
         self.specialty = specialty
-        print(f"Initializing {specialty.value} doctor agent, ID: {agent_id}")
+        print(f"Initializing {specialty.value} doctor agent, ID: {agent_id}, Model: {model_key}")
     
     def analyze_case(self, 
                     question: str,
@@ -190,7 +190,7 @@ class DoctorAgent(BaseAgent):
         Returns:
             Dictionary containing analysis results
         """
-        print(f"Doctor {self.agent_id} ({self.specialty.value}) analyzing case")
+        print(f"Doctor {self.agent_id} ({self.specialty.value}) analyzing case with model: {self.model_key}")
         
         # Prepare system message to guide the doctor's analysis
         system_message = {
@@ -279,7 +279,7 @@ class DoctorAgent(BaseAgent):
         Returns:
             Dictionary containing agreement status and possible rebuttal
         """
-        print(f"Doctor {self.agent_id} ({self.specialty.value}) reviewing synthesis")
+        print(f"Doctor {self.agent_id} ({self.specialty.value}) reviewing synthesis with model: {self.model_key}")
         
         # Get current round
         current_round = len(self.memory) // 2 + 1
@@ -409,7 +409,7 @@ class MetaAgent(BaseAgent):
             model_key: LLM model to use (defaults to text-only model since meta agent doesn't analyze images)
         """
         super().__init__(agent_id, AgentType.META, model_key)
-        print(f"Initializing meta agent, ID: {agent_id}")
+        print(f"Initializing meta agent, ID: {agent_id}, Model: {model_key}")
     
     def synthesize_opinions(self, 
                            question: str,
@@ -430,7 +430,7 @@ class MetaAgent(BaseAgent):
         Returns:
             Dictionary containing synthesized explanation and answer
         """
-        print(f"Meta agent synthesizing round {current_round} opinions")
+        print(f"Meta agent synthesizing round {current_round} opinions with model: {self.model_key}")
         
         # Prepare system message for synthesis
         system_message = {
@@ -526,7 +526,7 @@ class MetaAgent(BaseAgent):
         Returns:
             Dictionary containing final explanation and answer
         """
-        print(f"Meta agent making round {current_round} decision")
+        print(f"Meta agent making round {current_round} decision with model: {self.model_key}")
         
         # Check if all doctors agree
         all_agree = all(review.get('agree', False) for review in doctor_reviews)
@@ -646,7 +646,7 @@ class MDTConsultation:
     
     def __init__(self, 
                 max_rounds: int = 3,
-                doctor_model_key: str = "qwen-vl-max",
+                doctor_configs: List[Dict] = None,
                 meta_model_key: str = "qwen-max-latest",
                 output_dir: str = "mdt_consultations"):
         """
@@ -654,24 +654,30 @@ class MDTConsultation:
         
         Args:
             max_rounds: Maximum number of discussion rounds
-            doctor_model_key: LLM model for doctor agents (should support images)
+            doctor_configs: List of dictionaries specifying each doctor's specialty and model_key
             meta_model_key: LLM model for meta agent (can be text-only)
             output_dir: Directory to save consultation results
         """
         self.max_rounds = max_rounds
-        self.doctor_model_key = doctor_model_key
+        self.doctor_configs = doctor_configs or [
+            {"specialty": MedicalSpecialty.INTERNAL_MEDICINE, "model_key": "qwen-vl-max"},
+            {"specialty": MedicalSpecialty.SURGERY, "model_key": "qwen-vl-max"},
+            {"specialty": MedicalSpecialty.RADIOLOGY, "model_key": "qwen-vl-max"},
+        ]
         self.meta_model_key = meta_model_key
         self.output_dir = output_dir
         
         # Create output directory if it doesn't exist
         os.makedirs(output_dir, exist_ok=True)
         
-        # Initialize doctor agents with different specialties
-        self.doctor_agents = [
-            DoctorAgent("doctor_1", MedicalSpecialty.INTERNAL_MEDICINE, doctor_model_key),
-            DoctorAgent("doctor_2", MedicalSpecialty.SURGERY, doctor_model_key),
-            DoctorAgent("doctor_3", MedicalSpecialty.RADIOLOGY, doctor_model_key)
-        ]
+        # Initialize doctor agents with different specialties and models
+        self.doctor_agents = []
+        for idx, config in enumerate(self.doctor_configs, 1):
+            agent_id = f"doctor_{idx}"
+            specialty = config["specialty"]
+            model_key = config.get("model_key", "qwen-vl-max")
+            doctor_agent = DoctorAgent(agent_id, specialty, model_key)
+            self.doctor_agents.append(doctor_agent)
         
         # Initialize meta agent (using text-only model)
         self.meta_agent = MetaAgent("meta", meta_model_key)
@@ -682,8 +688,14 @@ class MDTConsultation:
         # Consultation history
         self.consultation_history = []
         
-        print(f"Initialized MDT consultation, max_rounds={max_rounds}, doctor_model={doctor_model_key}, meta_model={meta_model_key}")
-    
+        # Prepare doctor info for logging
+        doctor_info = ", ".join([
+            f"{config['specialty'].value} ({config.get('model_key', 'default')})"
+            for config in self.doctor_configs
+        ])
+        print(f"Initialized MDT consultation, max_rounds={max_rounds}, doctors: [{doctor_info}], meta_model={meta_model_key}")
+
+
     def run_consultation(self, 
                         qid: str,
                         question: str,
@@ -864,13 +876,15 @@ def parse_structured_output(response_text: str) -> Dict[str, str]:
         return result
 
 
-def process_input(data, output_dir):
+def process_input(data, output_dir, doctor_configs=None, meta_model_key="qwen-max-latest"):
     """
     Process input data based on its structure.
     
     Args:
         data: Input data dictionary with question, options, etc.
         output_dir: Output directory
+        doctor_configs: List of doctor configurations (specialty and model_key)
+        meta_model_key: Model key for the meta agent
         
     Returns:
         Processed result from MDT consultation
@@ -887,8 +901,8 @@ def process_input(data, output_dir):
     # Initialize consultation
     mdt = MDTConsultation(
         max_rounds=3, 
-        doctor_model_key="qwen-vl-max", 
-        meta_model_key="qwen-max-latest",
+        doctor_configs=doctor_configs,
+        meta_model_key=meta_model_key,
         output_dir=output_dir
     )
     
@@ -906,6 +920,23 @@ def process_input(data, output_dir):
 
 def main():
     """Demo function for MDT consultation."""
+    # 配置医生模型和角色
+    doctor_configs = [
+        {
+            "specialty": MedicalSpecialty.INTERNAL_MEDICINE,
+            "model_key": "deepseek-v3-ali"  # 支持视觉的模型
+        },
+        {
+            "specialty": MedicalSpecialty.SURGERY,
+            "model_key": "deepseek-v3-ali"  # 支持推理的模型
+        },
+        {
+            "specialty": MedicalSpecialty.RADIOLOGY,
+            "model_key": "qwen-vl-max"  # 支持视觉的模型
+        }
+    ]
+    meta_model_key = "deepseek-r1-ali"  # 使用推理模型进行综合判断
+
     # Example 1: MedQA (multiple choice)
     medqa_mc_example = {
         "qid": "medqa_mc_001",
@@ -949,8 +980,13 @@ def main():
     selected_example = medqa_mc_example
     
     try:
-        # Run consultation
-        result = process_input(selected_example, output_dir)
+        # Run consultation with custom configuration
+        result = process_input(
+            selected_example, 
+            output_dir,
+            doctor_configs=doctor_configs,
+            meta_model_key=meta_model_key
+        )
         
         print("\nConsultation completed!")
         print("Final answer:", result["answer"])
