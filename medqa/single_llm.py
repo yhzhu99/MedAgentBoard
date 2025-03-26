@@ -1,214 +1,122 @@
 from openai import OpenAI
 import os
-import base64
 import json
+import argparse
+from tqdm import tqdm
 from dotenv import load_dotenv
-from typing import Dict, Any, Optional, Tuple
+from utils import LLM_MODELS_SETTINGS
+# nohup python -m medqa.qa_model --dataset MedQA --prompt_type few_shot > MedQA_few_shot.log 2>&1 &
 
-# Load environment variables from .env file
-load_dotenv()
+def zero_shot_prompt(question: str, options: dict):
+    prompt = f"Question: {question} \n" \
+        f"Options: {options} \n" \
+        f"Please respond only with a single selected option's letter, like A, B, C... \n"
+    return prompt
 
-# Configure LLM model settings
-LLM_MODELS_SETTINGS = {
-    "deepseek-v3-official": {
-        "api_key": os.getenv("DEEPSEEK_API_KEY"),
-        "base_url": "https://api.deepseek.com",
-        "model_name": "deepseek-chat",
-        "comment": "DeepSeek V3 官方站点",
-        "reasoning": False,
-    },
-    "deepseek-r1-official": {
-        "api_key": os.getenv("DEEPSEEK_API_KEY"),
-        "base_url": "https://api.deepseek.com",
-        "model_name": "deepseek-reasoner",
-        "comment": "DeepSeek R1 推理模型 官方站点",
-        "reasoning": True,
-    },
-    "deepseek-v3-ali": {
-        "api_key": os.getenv("DASHSCOPE_API_KEY"),
-        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-        "model_name": "deepseek-v3",
-        "comment": "DeepSeek V3 阿里站点",
-        "reasoning": False,
-    },
-    "deepseek-r1-ali": {
-        "api_key": os.getenv("DASHSCOPE_API_KEY"),
-        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-        "model_name": "deepseek-r1",
-        "comment": "DeepSeek R1 推理模型 阿里站点",
-        "reasoning": True,
-    },
-    "qwen-max-latest": {
-        "api_key": os.getenv("DASHSCOPE_API_KEY"),
-        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-        "model_name": "qwen-max-latest",
-        "comment": "通义千问 Max",
-        "reasoning": False,
-    },
-    "qwen-vl-max": {
-        "api_key": os.getenv("DASHSCOPE_API_KEY"),
-        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-        "model_name": "qwen-vl-max",
-        "comment": "qwen-vl-max",
-        "reasoning": False,
-    }
-}
-
-
-def encode_image(image_path: str) -> str:
-    """
-    Encode an image file to base64 string.
+def few_shot_prompt(dataset: str, question: str, options: dict):
+    if dataset == "MedQA":
+        examples = "Example 1: Question: A 23-year-old pregnant woman at 22 weeks gestation presents with burning upon urination. She states it started 1 day ago and has been worsening despite drinking more water and taking cranberry extract. She otherwise feels well and is followed by a doctor for her pregnancy. Her temperature is 97.7°F (36.5°C), blood pressure is 122/77 mmHg, pulse is 80/min, respirations are 19/min, and oxygen saturation is 98% on room air. Physical exam is notable for an absence of costovertebral angle tenderness and a gravid uterus. Which of the following is the best treatment for this patient? \n" \
+            "Options: [A: Ampicillin, B: Ceftriaxone, C: Ciprofloxacin, D: Doxycycline, E: Nitrofurantoin] \n" \
+            "Answer: E \n" \
+            "Example 2: Question: A 3-month-old baby died suddenly at night while asleep. His mother noticed that he had died only after she awoke in the morning. No cause of death was determined based on the autopsy. Which of the following precautions could have prevented the death of the baby?\n" \
+            "Options: [A: Placing the infant in a supine position on a firm mattress while sleeping, B: Routine postnatal electrocardiogram (ECG), C: Keeping the infant covered and maintaining a high room temperature, D: Application of a device to maintain the sleeping position, E: Avoiding pacifier use during sleep] \n" \
+            "Answer: A \n" \
+            
+    elif dataset == "PubMedQA":
+        examples = "Example 1: Question: The reduced use of sugars-containing (SC) liquid medicines has increased the use of other dose forms, potentially resulting in more widespread dental effects, including tooth wear. The aim of this study was to assess the erosive potential of 97 paediatric medicines in vitro. The study took the form of in vitro measurement of endogenous pH and titratable acidity (mmol). Endogenous pH was measured using a pH meter, followed by titration to pH 7.0 with 0.1-M NaOH. Overall, 55 (57%) formulations had an endogenous pH of<5.5. The mean (+/- SD) endogenous pH and titratable acidity for 41 SC formulations were 5.26 +/- 1.30 and 0.139 +/- 0.133 mmol, respectively; for 56 sugars-free (SF) formulations, these figures were 5.73 +/- 1.53 and 0.413 +/- 1.50 mmol (P>0.05). Compared with their SC bioequivalents, eight SF medicines showed no significant differences for pH or titratable acidity, while 15 higher-strength medicines showed lower pH (P = 0.035) and greater titratable acidity (P = 0.016) than their lower-strength equivalents. Chewable and dispersible tablets (P<0.001), gastrointestinal medicines (P = 0.002) and antibiotics (P = 0.007) were significant predictors of higher pH. In contrast, effervescent tablets (P<0.001), and nutrition and blood preparations (P = 0.021) were significant predictors of higher titratable acidity. Are sugars-free medicines more erosive than sugars-containing medicines? \n" \
+            "Options: [A: Yes, B: No, C: Maybe] \n" \
+            "Answer: B \n" \
+            "Example 2: Question: This investigation assesses the effect of platelet-rich plasma (PRP) gel on postoperative pain, swelling, and trismus as well as healing and bone regeneration potential on mandibular third molar extraction sockets. A prospective randomized comparative clinical study was undertaken over a 2-year period. Patients requiring surgical extraction of a single impacted third molar and who fell within the inclusion criteria and indicated willingness to return for recall visits were recruited. The predictor variable was application of PRP gel to the socket of the third molar in the test group, whereas the control group had no PRP. The outcome variables were pain, swelling, and maximum mouth opening, which were measured using a 10-point visual analog scale, tape, and millimeter caliper, respectively. Socket healing was assessed radiographically by allocating scores for lamina dura, overall density, and trabecular pattern. Quantitative data were presented as mean. Mann-Whitney test was used to compare means between groups for continuous variables, whereas Fischer exact test was used for categorical variables. Statistical significance was inferred at P<.05. Sixty patients aged 19 to 35 years (mean: 24.7 \u00b1 3.6 years) were divided into both test and control groups of 30 patients each. The mean postoperative pain score (visual analog scale) was lower for the PRP group at all time points and this was statistically significant (P<.05). Although the figures for swelling and interincisal mouth opening were lower in the test group, this difference was not statistically significant. Similarly, the scores for lamina dura, trabecular pattern, and bone density were better among patients in the PRP group. This difference was also not statistically significant. Can autologous platelet-rich plasma gel enhance healing after surgical extraction of mandibular third molars? \n" \
+            "Options: [A: Yes, B: No, C: Maybe] \n" \
+            "Answer: A \n"
+        
+    prompt = f"Question: {question} \n" \
+        f"Options: {options} \n" \
+        f"Please respond only with [the selected option's letter, like A, B, C...\n" \
+        f"Here are some examples for you reference: '''{examples}''' "
+        
+    return prompt
     
-    Args:
-        image_path: Path to the image file
-        
-    Returns:
-        Base64 encoded string of the image
-        
-    Raises:
-        FileNotFoundError: If the image file does not exist
-        IOError: If there is an error reading the image file
-    """
-    try:
-        with open(image_path, "rb") as image_file:
-            return base64.b64encode(image_file.read()).decode("utf-8")
-    except FileNotFoundError:
-        raise FileNotFoundError(f"Image file not found at {image_path}")
-    except IOError as e:
-        raise IOError(f"Error reading image file: {e}")
+def cot_prompt(question: str, options: dict):
+    response_field = f"'Thought': [the step-by-step reasoning behind your answer] \n" \
+        f"'Option': [the letter of the selected option, like A, B, C, D]" \
 
+    prompt = f"Question: {question} \n" \
+        f"Options: {options} \n" \
+        f"Answer: Let's work this out in a step by step way to be sure we have the right answer. " \
+        f"Please give your answer in JSON format with the following two fields: '''{response_field}''' "
+    return prompt
 
-def get_structured_vqa_response(
-    image_path: str, 
-    prompt: str, 
-    model_key: str = "qwen-vl-max"
-) -> Dict[str, str]:
-    """
-    Get a structured VQA response with explanation and answer fields.
+def inference(datatset, question, options, model_key, prompt_type):
     
-    Args:
-        image_path: Path to the image file
-        prompt: The text prompt for the VQA task
-        model_key: Key of the model in LLM_MODELS_SETTINGS
-        
-    Returns:
-        Dictionary with 'explanation' and 'answer' fields
-        
-    Raises:
-        KeyError: If the specified model key does not exist
-        Exception: For any API call errors
-    """
-    if model_key not in LLM_MODELS_SETTINGS:
-        raise KeyError(f"Model '{model_key}' not found in settings.")
+    response_format = None
+    
+    if prompt_type == "zero_shot":
+        prompt = zero_shot_prompt(question, options)
+    elif prompt_type == "few_shot":
+        prompt = few_shot_prompt(dataset, question, options)
+    elif prompt_type == "cot":
+        prompt = cot_prompt(question, options)
+        response_format = {"type": "json_object"}
     
     model_settings = LLM_MODELS_SETTINGS[model_key]
-    
-    # Encode image
-    try:
-        base64_image = encode_image(image_path)
-    except (FileNotFoundError, IOError) as e:
-        raise e
-    
-    # Initialize OpenAI client
     client = OpenAI(
-        api_key=model_settings["api_key"],
-        base_url=model_settings["base_url"],
-    )
-    
-    # Prepare system message to enforce structured output
-    system_message = {
-        "role": "system",
-        "content": "You are a helpful visual question answering assistant. Always provide your response in JSON format with 'explanation' and 'answer' fields."
-    }
-    
-    # Prepare user message with image and prompt
-    user_message = {
-        "role": "user",
-        "content": [
-            {
-                "type": "image_url",
-                "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
-            },
-            {
-                "type": "text", 
-                "text": f"{prompt} Please output a JSON dictionary with two fields: 'explanation' and 'answer'."
-            },
-        ],
-    }
-    
-    try:
-        # Make API call
-        completion = client.chat.completions.create(
-            model=model_settings["model_name"],
-            messages=[system_message, user_message],
-            response_format={"type": "json_object"}
+            api_key=model_settings["api_key"],
+            base_url=model_settings["base_url"],
         )
-        
-        # Parse response
-        response_content = completion.choices[0].message.content
-        parsed_response = parse_structured_output(response_content)
-        return parsed_response
-        
-    except Exception as e:
-        raise Exception(f"Error calling LLM API: {e}")
-
-
-def parse_structured_output(response_text: str) -> Dict[str, str]:
-    """
-    Parse the LLM response to extract structured output.
     
-    Args:
-        response_text: The text response from the LLM
+    response = client.chat.completions.create(
+                    model=model_settings["model_name"],
+                    messages=[
+                        {"role": "system", "content": "You will be answering a medical MCQ question."},
+                        {"role": "user", "content": prompt},
+                    ],
+                    response_format=response_format,
+                    stream=False
+                )
         
-    Returns:
-        Dictionary with 'explanation' and 'answer' fields
-    """
-    try:
-        # Try to parse as JSON
-        parsed = json.loads(response_text)
-        
-        # Ensure required fields exist
-        if "explanation" not in parsed or "answer" not in parsed:
-            # If missing fields, attempt to extract from text
-            return {
-                "explanation": parsed.get("explanation", "No explanation provided"),
-                "answer": parsed.get("answer", "No answer provided")
-            }
-        return parsed
-    except json.JSONDecodeError:
-        # If not valid JSON, extract from text
-        # This is a fallback in case the model didn't format as JSON
-        lines = response_text.strip().split('\n')
-        explanation = ""
-        answer = ""
-        
-        for line in lines:
-            if line.lower().startswith("explanation:"):
-                explanation = line.split(":", 1)[1].strip()
-            elif line.lower().startswith("answer:"):
-                answer = line.split(":", 1)[1].strip()
-        
-        return {
-            "explanation": explanation or "Could not parse explanation",
-            "answer": answer or "Could not parse answer"
-        }
-
-
-def main():
-    """Main function to demonstrate VQA with structured output."""
-    image_path = "vqa/my_datasets/test_img.jpg"
-    prompt = "How is the patient oriented in the image? Please give brief and exact answer."
-    model_key = "qwen-vl-max"
+    return response.choices[0].message.content
     
-    try:
-        result = get_structured_vqa_response(image_path, prompt, model_key)
-        print(f"Answer: {result['answer']}")
-        print(f"Explanation: {result['explanation']}")
-        print("\nFull response:")
-        print(json.dumps(result, indent=2, ensure_ascii=False))
-    except Exception as e:
-        print(f"Error: {e}")
-
-
 if __name__ == "__main__":
-    main()
+    # get the dataset and prompt type from the arguments
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dataset", type=str, help="Dataset to use for testing")
+    parser.add_argument("--prompt_type", type=str, help="Prompt type to use for testing")
+    parser.add_argument("--model_name", type=str, help="Model name to use for inference")
+    parser.add_argument("--start_pos", type=int, help="Starting position of the file")
+    parser.add_argument("--end_pos", type=int, help="Ending position of the file")
+    args = parser.parse_args()
+    
+    dataset = args.dataset # ["MedQA", "PubMedQA"]
+    prompt_type = args.prompt_type # ["zero_shot", "few_shot", "cot"]
+    model_name = args.model_name
+    start_pos = args.start_pos
+    end_pos = args.end_pos
+    
+    data_path = f"./cleaned_datasets/{dataset.lower()}.json"
+    output_path = f"./output/{dataset}/{prompt_type}.json"
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    print(f"Output file created at: {output_path}")
+    
+    # load the data
+    with open(data_path, "r") as file:
+        data = [json.loads(line) for line in file]
+    
+    # get the data based on the start and end position
+    data = data[start_pos:end_pos] if end_pos != -1 else data[start_pos:]
+    total_lines = len(data)
+        
+    with open(output_path, "a") as output_file:
+        
+        for datum in tqdm(data, total=total_lines):
+            model_answer = inference(dataset, datum["question"], datum["options"], model_name, prompt_type)
+            
+            output = {
+                "qid": datum["qid"],
+                "question": datum["question"],
+                "ground_truth": datum["answer"],
+                "model_answer": model_answer
+            }
+            
+            json.dump(output, output_file)
+            output_file.write("\n")
