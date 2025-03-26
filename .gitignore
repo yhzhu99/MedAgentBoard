@@ -2,6 +2,9 @@ my_datasets/
 *.json
 test_img.jpg
 
+cleaned_datasets/
+*.json
+
 # TEMP FILES
 inf.sh
 
