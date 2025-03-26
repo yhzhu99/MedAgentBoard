@@ -7,6 +7,8 @@ from dotenv import load_dotenv
 from typing import Dict, Any, Optional, List
 import time
 import shutil
+import argparse
+from tqdm import tqdm
 
 # Load environment variables
 load_dotenv()
@@ -583,15 +585,16 @@ class MDTConsultation:
             Dictionary containing final consultation result
         """
         # Create case directory within output directory, creating any nested directories as needed
-        case_dir = os.path.join(self.output_dir, qid)
+        
+        case_dir = os.path.join(self.output_dir, str(qid))
         os.makedirs(case_dir, exist_ok=True)
         
-        # Copy image to case directory if provided
-        case_image_path = None
-        if image_path:
-            image_filename = os.path.basename(image_path)
-            case_image_path = os.path.join(case_dir, image_filename)
-            shutil.copy2(image_path, case_image_path)
+        # # Copy image to case directory if provided
+        # case_image_path = None
+        # if image_path:
+        #     image_filename = os.path.basename(image_path)
+        #     case_image_path = os.path.join(case_dir, image_filename)
+        #     shutil.copy2(image_path, case_image_path)
         
         print(f"Starting MDT consultation for case {qid}")
         print(f"Question: {question}")
@@ -759,7 +762,7 @@ def process_input(data, output_dir, doctor_configs=None, meta_model_key="qwen-ma
     # Optional fields
     options = data.get("options")
     image_path = data.get("image_path")
-    gt_answer = data.get("gt_answer")
+    gt_answer = data.get("answer")
     
     # Create nested directories if needed
     if output_dir and not os.path.exists(output_dir):
@@ -787,86 +790,156 @@ def process_input(data, output_dir, doctor_configs=None, meta_model_key="qwen-ma
 
 
 def main():
-    """Demo function for MDT consultation."""
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dataset", type=str, help="Dataset to use for testing")
+    parser.add_argument("--meta_model", type=str, help="Model used for meta agent")
+    parser.add_argument("--decision_model", type=str, help="Model used for decision making agent")
+    parser.add_argument("--doctor_models", nargs=3, help="Model used for each doctor agent")
+    parser.add_argument("--start_pos", type=int, help="Starting position of the file")
+    parser.add_argument("--end_pos", type=int, help="Ending position of the file")
+    args = parser.parse_args()
+    
+    dataset = args.dataset # ["Path-VQA", "VQA-Rad", "MedQA", "PubMedQA"]
+    meta_model = args.meta_model
+    decision_model = args.decision_model
+    doctor_models = args.doctor_models
+    start_pos = args.start_pos
+    end_pos = args.end_pos
+    
+    data_path = f"./cleaned_datasets/{dataset.lower()}.json"
+    output_path = f"./output/{dataset}/medagent.json"
+    log_dir = f"./output/{dataset}/mdt_logs/medagent"
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    print(f"Output file created at: {output_path}")
+    
+    # load the data
+    with open(data_path, "r") as file:
+        data = [json.loads(line) for line in file]
+        
+    # get the data based on the start and end position
+    data = data[start_pos:end_pos] if end_pos != -1 else data[start_pos:]
+    total_lines = len(data)
+    
     # Configure doctor models and roles
     doctor_configs = [
         {
             "specialty": MedicalSpecialty.INTERNAL_MEDICINE,
-            "model_key": "qwen-max-latest"  # Vision-capable model
+            "model_key": doctor_models[0]
         },
         {
             "specialty": MedicalSpecialty.SURGERY,
-            "model_key": "qwen-max-latest"  # Vision-capable model
+            "model_key": doctor_models[1]
         },
         {
             "specialty": MedicalSpecialty.RADIOLOGY,
-            "model_key": "qwen-max-latest"  # Vision-capable model
+            "model_key": doctor_models[2]
         }
     ]
-    meta_model_key = "qwen-max-latest"  # Reasoning model for synthesis
-    decision_model_key = "qwen-max-latest"  # Reasoning model for final decision
+    
+    with open(output_path, "a") as output_file:
+        
+        for datum in tqdm(data, total=total_lines, desc=f"Testing on {dataset} with MedAgent"):
+            # Closed question
+            if (dataset in ["Path_VQA", "VQA_Rad"] and datum["answer"].lower() in ["yes", "no"]) or dataset in ["MedQA", "PubMedQA"]:
+                
+                # try:
+                # Run consultation with custom configuration
+                result = process_input(
+                    datum, 
+                    log_dir,
+                    doctor_configs=doctor_configs,
+                    meta_model_key=meta_model,
+                    decision_model_key=decision_model
+                )
+                    
+                    # print("\nConsultation completed!")
+                    # print("Final answer:", result["answer"])
+                    # print("Explanation:", result["explanation"])
+                    
+                    # # Show where consultation history is saved
+                    # print(f"Consultation history saved in {output_dir}/{selected_example['qid']}")
+                    
+                # except Exception as e:
+                #     result = "Error"
+                #     print(f"MDT consultation error: {e}")
+                
+                output = {
+                    "qid": datum["qid"],
+                    "question": datum["question"],
+                    "ground_truth": datum["answer"],
+                    "model_answer": result
+                }
+                
+                json.dump(output, output_file)
+                output_file.write("\n")
+            else:
+                continue
+    
 
-    # Example 1: MedQA (multiple choice)
-    medqa_mc_example = {
-        "qid": "medqa_mc_001",
-        "question": "A junior orthopaedic surgery resident is completing a carpal tunnel repair with the department chairman as the attending physician. During the case, the resident inadvertently cuts a flexor tendon. The tendon is repaired without complication. The attending tells the resident that the patient will do fine, and there is no need to report this minor complication that will not harm the patient, as he does not want to make the patient worry unnecessarily. He tells the resident to leave this complication out of the operative report. Which of the following is the correct next action for the resident to take?",
-        "options": {
-            "A": "Disclose the error to the patient but leave it out of the operative report",
-            "B": "Disclose the error to the patient and put it in the operative report",
-            "C": "Tell the attending that he cannot fail to disclose this mistake",
-            "D": "Report the physician to the ethics committee",
-            "E": "Refuse to dictate the operative report"
-        },
-        "gt_answer": "C",
-    }
-    
-    # Example 2: MedQA (free-form)
-    medqa_ff_example = {
-        "qid": "medqa_ff_001",
-        "question": "A junior orthopaedic surgery resident is completing a carpal tunnel repair with the department chairman as the attending physician. During the case, the resident inadvertently cuts a flexor tendon. The tendon is repaired without complication. The attending tells the resident that the patient will do fine, and there is no need to report this minor complication that will not harm the patient, as he does not want to make the patient worry unnecessarily. He tells the resident to leave this complication out of the operative report. Which of the following is the correct next action for the resident to take?",
-        "gt_answer": "Tell the attending that he cannot fail to disclose this mistake",
-    }
-    
-    # Example 3: MedVQA
-    medvqa_example = {
-        "qid": "medvqa_001",
-        "image_path": "vqa/my_datasets/test_img.jpg",
-        "question": "What is the main abnormality shown in this image?",
-        "options": {
-            "A": "Lung nodule",
-            "B": "Pleural effusion",
-            "C": "Pneumothorax",
-            "D": "Pulmonary edema"
-        },
-        "gt_answer": "C",
-    }
+    # meta_model_key = "qwen-max-latest"  # Reasoning model for synthesis
+    # decision_model_key = "qwen-max-latest"  # Reasoning model for final decision
 
-    output_dir = "qa/results/medqa/medagent/multiple_choice"
-    # output_dir = "qa/results/medqa/free_form"
-    # output_dir = "vqa/results/medvqa/multiple_choice" # Use for MedVQA
+    # # Example 1: MedQA (multiple choice)
+    # medqa_mc_example = {
+    #     "qid": "medqa_mc_001",
+    #     "question": "A junior orthopaedic surgery resident is completing a carpal tunnel repair with the department chairman as the attending physician. During the case, the resident inadvertently cuts a flexor tendon. The tendon is repaired without complication. The attending tells the resident that the patient will do fine, and there is no need to report this minor complication that will not harm the patient, as he does not want to make the patient worry unnecessarily. He tells the resident to leave this complication out of the operative report. Which of the following is the correct next action for the resident to take?",
+    #     "options": {
+    #         "A": "Disclose the error to the patient but leave it out of the operative report",
+    #         "B": "Disclose the error to the patient and put it in the operative report",
+    #         "C": "Tell the attending that he cannot fail to disclose this mistake",
+    #         "D": "Report the physician to the ethics committee",
+    #         "E": "Refuse to dictate the operative report"
+    #     },
+    #     "gt_answer": "C",
+    # }
     
-    # Choose one example to run
-    selected_example = medqa_mc_example
+    # # Example 2: MedQA (free-form)
+    # medqa_ff_example = {
+    #     "qid": "medqa_ff_001",
+    #     "question": "A junior orthopaedic surgery resident is completing a carpal tunnel repair with the department chairman as the attending physician. During the case, the resident inadvertently cuts a flexor tendon. The tendon is repaired without complication. The attending tells the resident that the patient will do fine, and there is no need to report this minor complication that will not harm the patient, as he does not want to make the patient worry unnecessarily. He tells the resident to leave this complication out of the operative report. Which of the following is the correct next action for the resident to take?",
+    #     "gt_answer": "Tell the attending that he cannot fail to disclose this mistake",
+    # }
     
-    try:
-        # Run consultation with custom configuration
-        result = process_input(
-            selected_example, 
-            output_dir,
-            doctor_configs=doctor_configs,
-            meta_model_key=meta_model_key,
-            decision_model_key=decision_model_key
-        )
+    # # Example 3: MedVQA
+    # medvqa_example = {
+    #     "qid": "medvqa_001",
+    #     "image_path": "vqa/my_datasets/test_img.jpg",
+    #     "question": "What is the main abnormality shown in this image?",
+    #     "options": {
+    #         "A": "Lung nodule",
+    #         "B": "Pleural effusion",
+    #         "C": "Pneumothorax",
+    #         "D": "Pulmonary edema"
+    #     },
+    #     "gt_answer": "C",
+    # }
+
+    # output_dir = "qa/results/medqa/medagent/multiple_choice"
+    # # output_dir = "qa/results/medqa/free_form"
+    # # output_dir = "vqa/results/medvqa/multiple_choice" # Use for MedVQA
+    
+    # # Choose one example to run
+    # selected_example = medqa_mc_example
+    
+    # try:
+    #     # Run consultation with custom configuration
+    #     result = process_input(
+    #         selected_example, 
+    #         output_dir,
+    #         doctor_configs=doctor_configs,
+    #         meta_model_key=meta_model_key,
+    #         decision_model_key=decision_model_key
+    #     )
         
-        print("\nConsultation completed!")
-        print("Final answer:", result["answer"])
-        print("Explanation:", result["explanation"])
+    #     print("\nConsultation completed!")
+    #     print("Final answer:", result["answer"])
+    #     print("Explanation:", result["explanation"])
         
-        # Show where consultation history is saved
-        print(f"Consultation history saved in {output_dir}/{selected_example['qid']}")
+    #     # Show where consultation history is saved
+    #     print(f"Consultation history saved in {output_dir}/{selected_example['qid']}")
         
-    except Exception as e:
-        print(f"MDT consultation error: {e}")
+    # except Exception as e:
+    #     print(f"MDT consultation error: {e}")
 
 
 if __name__ == "__main__":
