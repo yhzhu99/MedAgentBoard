@@ -107,7 +107,7 @@ if __name__ == "__main__":
         
     with open(output_path, "a") as output_file:
         
-        for datum in tqdm(data, total=total_lines):
+        for datum in tqdm(data, total=total_lines, desc=f"Testing on {dataset} with {prompt_type}"):
             # Closed question
             if datum["answer"].lower() in ["yes", "no"]:
                 model_answer = inference(dataset, datum["question"], datum["image_path"], model_name, prompt_type)

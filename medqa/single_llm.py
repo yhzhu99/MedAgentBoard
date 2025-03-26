@@ -108,7 +108,7 @@ if __name__ == "__main__":
         
     with open(output_path, "a") as output_file:
         
-        for datum in tqdm(data, total=total_lines):
+        for datum in tqdm(data, total=total_lines, desc=f"Testing on {dataset} with {prompt_type}"):
             model_answer = inference(dataset, datum["question"], datum["options"], model_name, prompt_type)
             
             output = {
