@@ -8,17 +8,17 @@ medqa_clean = "./cleaned_datasets/medqa.json"
 
 # PubMedQA
 ori_pqal = "./my_datasets/PubMedQA/ori_pqal.json"
-test_gt = "./datasets/PubMedQA/test_ground_truth.json"
+test_gt = "./my_datasets/PubMedQA/test_ground_truth.json"
 pubmedqa_clean = "./cleaned_datasets/pubmedqa.json"
 
 # Path-VQA
-path_vqa = "./my_datasets/path-vqa/qas/test/test.pkl"
-path_vqa_images = "./datasets/path-vqa/images/test"
+path_vqa = "./my_datasets/Path_VQA/qas/test/test.pkl"
+path_vqa_images = "./my_datasets/Path_VQA/images/test"
 path_vqa_clean = "./cleaned_datasets/path_vqa.json"
 
 # VQA-Rad
-vqa_rad = "./my_datasets/vqa_rad/testset.json"
-vqa_rad_images = "./datasets/vqa_rad/images"
+vqa_rad = "./my_datasets/VQA_Rad/testset.json"
+vqa_rad_images = "./my_datasets/VQA_Rad/images"
 vqa_rad_clean = "./cleaned_datasets/vqa_rad.json"
 
 os.makedirs("./cleaned_datasets", exist_ok=True)
