@@ -20,6 +20,20 @@ LLM_MODELS_SETTINGS = {
         "comment": "DeepSeek R1 Reasoning Model Official",
         "reasoning": True,
     },
+    "deepseek-v3-huoshan": {
+        "api_key": os.getenv("HUOSHAN_API_KEY"),
+        "base_url": "https://ark.cn-beijing.volces.com/api/v3",
+        "model_name": "deepseek-v3-250324",
+        "comment": "DeepSeek V3 Huoshan",
+        "reasoning": False,
+    },
+    "deepseek-r1-huoshan": {
+        "api_key": os.getenv("HUOSHAN_API_KEY"),
+        "base_url": "https://ark.cn-beijing.volces.com/api/v3",
+        "model_name": "deepseek-r1-250120",
+        "comment": "DeepSeek R1 Reasoning Model Huoshan",
+        "reasoning": True,
+    },
     "deepseek-v3-ali": {
         "api_key": os.getenv("DASHSCOPE_API_KEY"),
         "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
