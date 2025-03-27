@@ -1,10 +1,10 @@
-llm_model_name="deepseek-v3-official"
+llm_model_name="deepseek-v3-huoshan"
 vllm_model_name="qwen-vl-max"
-meta_model_name="deepseek-v3-official"
-decision_model_name="deepseek-v3-official"
-doctor1_model_name_llm="deepseek-v3-official"
-doctor2_model_name_llm="deepseek-v3-official"
-doctor3_model_name_llm="deepseek-v3-official"
+meta_model_name="deepseek-v3-huoshan"
+decision_model_name="deepseek-v3-huoshan"
+doctor1_model_name_llm="deepseek-v3-huoshan"
+doctor2_model_name_llm="deepseek-v3-huoshan"
+doctor3_model_name_llm="deepseek-v3-huoshan"
 doctor1_model_name_vllm="qwen-vl-max"
 doctor2_model_name_vllm="qwen-vl-max"
 doctor3_model_name_vllm="qwen-vl-max"
@@ -80,6 +80,22 @@ doctor3_model_name_vllm="qwen-vl-max"
 #     --start_pos 0 \
 #     --end_pos 2
 
+# === Single LLM with cot-sc for QA ===
+# === MedQA ===
+python -m medqa.single_llm \
+    --dataset "MedQA" \
+    --prompt_type "cot-sc" \
+    --model_name "${llm_model_name}" \
+    --start_pos 0 \
+    --end_pos 1
+
+# # === PubMedQA ===
+# python -m medqa.single_llm \
+#     --dataset "PubMedQA" \
+#     --prompt_type "cot-sc" \
+#     --model_name "${llm_model_name}" \
+#     --start_pos 0 \
+#     --end_pos 1
 
 # # === ColaCare for QA ===
 # # === MedQA ===
@@ -152,40 +168,40 @@ doctor3_model_name_vllm="qwen-vl-max"
 #     --start_pos 0 \
 #     --end_pos 2
 
-# === MedAgent for VQA ===
-# === Path-VQA ===
-python -m medqa.multi_agent_medagent \
-    --dataset "Path_VQA" \
-    --meta_model ${meta_model_name} \
-    --decision_model ${decision_model_name} \
-    --doctor_models ${doctor1_model_name_vllm} ${doctor2_model_name_vllm} ${doctor3_model_name_vllm} \
-    --start_pos 2 \
-    --end_pos 3
+# # === MedAgent for VQA ===
+# # === Path-VQA ===
+# python -m medqa.multi_agent_medagent \
+#     --dataset "Path_VQA" \
+#     --meta_model ${meta_model_name} \
+#     --decision_model ${decision_model_name} \
+#     --doctor_models ${doctor1_model_name_vllm} ${doctor2_model_name_vllm} ${doctor3_model_name_vllm} \
+#     --start_pos 2 \
+#     --end_pos 3
 
-# === VQA-Rad ===
-python -m medqa.multi_agent_medagent \
-    --dataset "VQA_Rad" \
-    --meta_model ${meta_model_name} \
-    --decision_model ${decision_model_name} \
-    --doctor_models ${doctor1_model_name_vllm} ${doctor2_model_name_vllm} ${doctor3_model_name_vllm} \
-    --start_pos 0 \
-    --end_pos 1
+# # === VQA-Rad ===
+# python -m medqa.multi_agent_medagent \
+#     --dataset "VQA_Rad" \
+#     --meta_model ${meta_model_name} \
+#     --decision_model ${decision_model_name} \
+#     --doctor_models ${doctor1_model_name_vllm} ${doctor2_model_name_vllm} ${doctor3_model_name_vllm} \
+#     --start_pos 0 \
+#     --end_pos 1
 
-# === ColaCare for VQA ===
-# === Path-VQA ===
-python -m medqa.multi_agent_colacare \
-    --dataset "Path_VQA" \
-    --meta_model ${meta_model_name} \
-    --decision_model ${decision_model_name} \
-    --doctor_models ${doctor1_model_name_vllm} ${doctor2_model_name_vllm} ${doctor3_model_name_vllm} \
-    --start_pos 2 \
-    --end_pos 3
+# # === ColaCare for VQA ===
+# # === Path-VQA ===
+# python -m medqa.multi_agent_colacare \
+#     --dataset "Path_VQA" \
+#     --meta_model ${meta_model_name} \
+#     --decision_model ${decision_model_name} \
+#     --doctor_models ${doctor1_model_name_vllm} ${doctor2_model_name_vllm} ${doctor3_model_name_vllm} \
+#     --start_pos 2 \
+#     --end_pos 3
 
-# === VQA-Rad ===
-python -m medqa.multi_agent_colacare \
-    --dataset "VQA_Rad" \
-    --meta_model ${meta_model_name} \
-    --decision_model ${decision_model_name} \
-    --doctor_models ${doctor1_model_name_vllm} ${doctor2_model_name_vllm} ${doctor3_model_name_vllm} \
-    --start_pos 0 \
-    --end_pos 1
+# # === VQA-Rad ===
+# python -m medqa.multi_agent_colacare \
+#     --dataset "VQA_Rad" \
+#     --meta_model ${meta_model_name} \
+#     --decision_model ${decision_model_name} \
+#     --doctor_models ${doctor1_model_name_vllm} ${doctor2_model_name_vllm} ${doctor3_model_name_vllm} \
+#     --start_pos 0 \
+#     --end_pos 1
