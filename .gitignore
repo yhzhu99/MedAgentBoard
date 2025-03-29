@@ -3,7 +3,7 @@ my_datasets/
 *.json
 test_img.jpg
 .DS_Store
-
+debug.py
 *.json
 
 # TEMP FILES
