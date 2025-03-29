@@ -1,16 +1,13 @@
 my_datasets/
+
 *.json
 test_img.jpg
 .DS_Store
 
-cleaned_datasets/
 *.json
 
 # TEMP FILES
 inf.sh
-
-# DATASETS
-/src/datasets/
 
 # ZONE.IDENTIFIER
 *Zone.Identifier

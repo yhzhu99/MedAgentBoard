@@ -1,7 +1,5 @@
 from dotenv import load_dotenv
 import os
-import base64
-
 
 load_dotenv()
 
@@ -34,6 +32,20 @@ LLM_MODELS_SETTINGS = {
         "comment": "DeepSeek R1 Reasoning Model Ali",
         "reasoning": True,
     },
+    "deepseek-v3-ark": {
+        "api_key": os.getenv("ARK_API_KEY"),
+        "base_url": "https://ark.cn-beijing.volces.com/api/v3",
+        "model_name": "deepseek-v3",
+        "comment": "DeepSeek V3 Ark",
+        "reasoning": False,
+    },
+    "deepseek-r1-ark": {
+        "api_key": os.getenv("ARK_API_KEY"),
+        "base_url": "https://ark.cn-beijing.volces.com/api/v3",
+        "model_name": "deepseek-r1",
+        "comment": "DeepSeek R1 Reasoning Model Ark",
+        "reasoning": True,
+    },
     "qwen-max-latest": {
         "api_key": os.getenv("DASHSCOPE_API_KEY"),
         "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
@@ -47,23 +59,5 @@ LLM_MODELS_SETTINGS = {
         "model_name": "qwen-vl-max",
         "comment": "qwen-vl-max",
         "reasoning": False,
-    }
+    },
 }
-
-def encode_image(image_path: str) -> str:
-    """
-    Encode an image file as a base64 string.
-    
-    Args:
-        image_path: Path to the image file
-        
-    Returns:
-        Base64 encoded string of the image
-    """
-    try:
-        with open(image_path, "rb") as image_file:
-            return base64.b64encode(image_file.read()).decode("utf-8")
-    except FileNotFoundError:
-        raise FileNotFoundError(f"Image file not found: {image_path}")
-    except IOError as e:
-        raise IOError(f"Error reading image file: {e}")
