@@ -67,6 +67,7 @@ def process_medqa(raw_dir=RAW_DATA_DIR, output_dir=PROCESSED_DATA_DIR, sample_si
     save_json(processed_data, output_path)
     print(f"MedQA dataset processed and saved to: {output_path}")
 
+
 def process_pubmedqa(raw_dir=RAW_DATA_DIR, output_dir=PROCESSED_DATA_DIR, sample_size: int = None):
     """
     Process the PubMedQA dataset from raw format to standardized format.
@@ -78,43 +79,69 @@ def process_pubmedqa(raw_dir=RAW_DATA_DIR, output_dir=PROCESSED_DATA_DIR, sample
     """
     # Define paths
     ori_pqal_path = os.path.join(raw_dir, "PubMedQA", "ori_pqal.json")
-    test_gt_path = os.path.join(raw_dir, "PubMedQA", "test_ground_truth.json")
-    output_path = os.path.join(output_dir, "PubMedQA", "medqa.json")
+    output_path_base = os.path.join(output_dir, "PubMedQA")
+    output_path_mc = os.path.join(output_path_base, "pubmedqa_mc.json")
+    output_path_ff = os.path.join(output_path_base, "pubmedqa_ff.json")
 
     # Create output directory if it doesn't exist
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    os.makedirs(os.path.dirname(output_path_base), exist_ok=True)
 
     # Load datasets
-    test_gt = load_json(test_gt_path)
     data = load_json(ori_pqal_path)
 
     # Define standard options
     options = {"A": "Yes", "B": "No", "C": "Maybe"}
-    options_map = {"yes": "A", "no": "B", "maybe": "C"}
+    options_map = {"Yes": "A", "No": "B", "Maybe": "C"}
 
-    processed_data = []
+    processed_data_mc = []
+    processed_data_ff = []
 
     for qid, item_data in data.items():
-        if qid in test_gt.keys():
-            context = "\n".join(item_data["CONTEXTS"])
-            question = item_data["QUESTION"]
+        context = " ".join(item_data["CONTEXTS"])  # Concatenate contexts into a single string
+        question = item_data["QUESTION"]
+        answer = item_data["final_decision"].capitalize()
 
-            curated_data = {
-                "qid": f"pubmedqa_{qid}",
-                "question": context + " " + question,
-                "options": options,
-                "answer": options_map[test_gt[qid]]
-            }
+        # Free-form version: Concatenate context into the question
+        free_form_question = (
+            f"{question}\n\n"
+            f"Context: {context}"
+        )
 
-            processed_data.append(curated_data)
+        # Multiple-choice version: Concatenate context into the question
+        mc_question = (
+            f"{question}\n\n"
+            f"Context: {context}"
+        )
+
+
+        # Add both versions to the processed data
+        free_form_data = {
+            "qid": f"pubmedqa_ff_{qid}",
+            "question": free_form_question,
+            "answer": f"{answer}. {item_data["LONG_ANSWER"]}"  # Use the long answer for free-form
+        }
+
+        mc_data = {
+            "qid": f"pubmedqa_mc_{qid}",
+            "question": mc_question,
+            "options": options,
+            "answer": options_map[answer]  # Map ground truth to option key
+        }
+
+        processed_data_ff.append(free_form_data)
+        processed_data_mc.append(mc_data)
 
     # Apply sampling if requested
     if sample_size is not None:
-        processed_data = random_select_samples(processed_data, sample_size)
+        processed_data_ff = random_select_samples(processed_data_ff, sample_size)
+        processed_data_mc = random_select_samples(processed_data_mc, sample_size)
 
     # Save processed data
-    save_json(processed_data, output_path)
-    print(f"PubMedQA dataset processed and saved to: {output_path}")
+    save_json(processed_data_ff, output_path_ff)
+    print(f"PubMedQA dataset (free-form) processed and saved to: {output_path_ff}")
+    save_json(processed_data_mc, output_path_mc)
+    print(f"PubMedQA dataset (free-form) processed and saved to: {output_path_mc}")
+
 
 def process_pathvqa(raw_dir=RAW_DATA_DIR, output_dir=PROCESSED_DATA_DIR, sample_size: int = None):
     """
@@ -172,6 +199,7 @@ def process_pathvqa(raw_dir=RAW_DATA_DIR, output_dir=PROCESSED_DATA_DIR, sample_
     save_json(processed_data, output_path)
     print(f"PathVQA dataset processed and saved to: {output_path}")
 
+
 def process_vqa_rad(raw_dir=RAW_DATA_DIR, output_dir=PROCESSED_DATA_DIR, sample_size: int = None):
     """
     Process the VQA-RAD dataset from raw format to standardized format.
@@ -217,6 +245,7 @@ def process_vqa_rad(raw_dir=RAW_DATA_DIR, output_dir=PROCESSED_DATA_DIR, sample_
     save_json(processed_data, output_path)
     print(f"VQA-RAD dataset processed and saved to: {output_path}")
 
+
 def main():
     parser = argparse.ArgumentParser(description="Process medical datasets into a standardized format")
     parser.add_argument("--medqa", action="store_true", help="Process MedQA dataset")
@@ -249,6 +278,7 @@ def main():
         process_vqa_rad(args.raw_dir, args.output_dir, args.sample_size)
 
     print("All requested datasets processed successfully!")
+
 
 if __name__ == "__main__":
     main()
