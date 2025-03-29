@@ -901,6 +901,7 @@ def main():
                 "question": item["question"],
                 "options": item.get("options"),
                 "ground_truth": item.get("answer"),
+                "predicted_answer": result["case_history"]["final_decision"]["answer"],
                 "case_history": result
             }
 
