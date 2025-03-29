@@ -212,38 +212,62 @@ def process_vqa_rad(raw_dir=RAW_DATA_DIR, output_dir=PROCESSED_DATA_DIR, sample_
     # Define paths
     vqa_rad_path = os.path.join(raw_dir, "VQA-RAD", "testset.json")
     vqa_rad_images = os.path.join(raw_dir, "VQA-RAD", "images")
-    output_path = os.path.join(output_dir, "VQA-RAD", "medqa.json")
+    output_path_base = os.path.join(output_dir, "VQA-RAD")
+    output_path_mc = os.path.join(output_path_base, "vqa_rad_mc.json")
+    output_path_ff = os.path.join(output_path_base, "vqa_rad_ff.json")
 
     # Create output directory if it doesn't exist
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    os.makedirs(output_path_base, exist_ok=True)
 
     # Load dataset
     data = load_json(vqa_rad_path)
 
-    processed_data = []
+    processed_data_mc = []
+    processed_data_ff = []
+
+    # Define standard options for yes/no questions
+    options = {"A": "Yes", "B": "No"}
+    options_map = {"yes": "A", "no": "B"}
 
     for item in data:
         qid = item["qid"]
         question = item["question"]
         image_path = os.path.join(vqa_rad_images, item["image_name"])
         answer = item["answer"]
+        answer_type = item["answer_type"]
 
-        curated_data = {
-            "qid": f"vqa_rad_{qid}",
-            "question": question,
-            "image_path": image_path,
-            "answer": answer
-        }
-
-        processed_data.append(curated_data)
+        if answer_type == "CLOSED":
+            # Process CLOSED type as multiple choice (yes/no)
+            answer_lower = answer.lower().strip()
+            if answer_lower in ["yes", "no"]:
+                mc_data = {
+                    "qid": f"vqa_rad_mc_{qid}",
+                    "question": question,
+                    "image_path": image_path,
+                    "options": options,
+                    "answer": options_map[answer_lower]
+                }
+                processed_data_mc.append(mc_data)
+        elif answer_type == "OPEN":
+            # Process OPEN type as free-form
+            ff_data = {
+                "qid": f"vqa_rad_ff_{qid}",
+                "question": question,
+                "image_path": image_path,
+                "answer": answer
+            }
+            processed_data_ff.append(ff_data)
 
     # Apply sampling if requested
     if sample_size is not None:
-        processed_data = random_select_samples(processed_data, sample_size)
+        processed_data_mc = random_select_samples(processed_data_mc, sample_size)
+        processed_data_ff = random_select_samples(processed_data_ff, sample_size)
 
     # Save processed data
-    save_json(processed_data, output_path)
-    print(f"VQA-RAD dataset processed and saved to: {output_path}")
+    save_json(processed_data_mc, output_path_mc)
+    save_json(processed_data_ff, output_path_ff)
+    print(f"VQA-RAD dataset (multiple-choice) processed and saved to: {output_path_mc}")
+    print(f"VQA-RAD dataset (free-form) processed and saved to: {output_path_ff}")
 
 
 def main():
