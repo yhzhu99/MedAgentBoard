@@ -875,8 +875,7 @@ def main():
         pid = item["qid"]
 
         # Skip if already processed
-        item_output_dir = os.path.join(logs_dir, pid)
-        if os.path.exists(os.path.join(item_output_dir, "result.json")):
+        if os.path.exists(os.path.join(logs_dir, f"{pid}-result.json")):
             print(f"Skipping {pid} - already processed")
             continue
 
@@ -906,7 +905,7 @@ def main():
             }
 
             # Save individual result
-            save_json(item_result, os.path.join(item_output_dir, "result.json"))
+            save_json(item_result, os.path.join(logs_dir, f"{pid}-result.json"))
 
         except Exception as e:
             print(f"Error processing item {pid}: {e}")
