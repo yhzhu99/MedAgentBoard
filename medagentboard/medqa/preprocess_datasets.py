@@ -2,7 +2,7 @@ import os
 import random
 import argparse
 from typing import List, Dict, Any
-
+import pandas as pd
 from medagentboard.utils.json_utils import save_json, load_json, load_jsonl
 
 # Define paths
@@ -154,39 +154,38 @@ def process_pathvqa(raw_dir=RAW_DATA_DIR, output_dir=PROCESSED_DATA_DIR, sample_
         output_dir: Directory to save processed dataset
         sample_size: Number of samples to select (None for all samples)
     """
-    # Define paths - note we're using JSON instead of pkl
-    path_vqa_path = os.path.join(raw_dir, "PathVQA", "qas", "test", "test.json")
+    path_vqa_path = os.path.join(raw_dir, "PathVQA", "qas", "test", "test.pkl")
     path_vqa_images = os.path.join(raw_dir, "PathVQA", "images", "test")
-    output_path = os.path.join(output_dir, "PathVQA", "medqa.json")
+    output_path = os.path.join(output_dir, "PathVQA", "pathvqa_mc.json")
 
     # Create output directory if it doesn't exist
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-    if not os.path.exists(path_vqa_path):
-        pkl_path = os.path.join(raw_dir, "PathVQA", "qas", "test", "test.pkl")
-        if os.path.exists(pkl_path):
-            raise FileNotFoundError(
-                f"Expected JSON file not found at {path_vqa_path}. "
-                f"Please convert the pickle file {pkl_path} to JSON format first."
-            )
-        else:
-            raise FileNotFoundError(f"Neither JSON nor PKL file found for PathVQA dataset.")
-
     # Load the dataset
-    data = load_json(path_vqa_path)
+    data = pd.read_pickle(path_vqa_path)
 
     processed_data = []
 
+    # Define standard options for yes/no questions
+    options = {"A": "Yes", "B": "No"}
+    options_map = {"yes": "A", "no": "B"}
+
     for i, item in enumerate(data):
+        answer = str(item["answer"]).lower().strip()
+
+        # Only process questions with yes/no answers
+        if answer not in ["yes", "no"]:
+            continue
+
         question = item["question"]
         image_path = os.path.join(path_vqa_images, item["image"]) + ".jpg"
-        answer = item["answer"]
 
         curated_data = {
-            "qid": f"pathvqa_{str(i + 1).zfill(3)}",
+            "qid": f"pathvqa_mc_{str(i + 1).zfill(6)}",
             "question": question,
             "image_path": image_path,
-            "answer": answer
+            "options": options,
+            "answer": options_map[answer]  # Map answer to option key
         }
 
         processed_data.append(curated_data)
@@ -197,7 +196,8 @@ def process_pathvqa(raw_dir=RAW_DATA_DIR, output_dir=PROCESSED_DATA_DIR, sample_
 
     # Save processed data
     save_json(processed_data, output_path)
-    print(f"PathVQA dataset processed and saved to: {output_path}")
+    print(f"PathVQA dataset (yes/no questions only) processed and saved to: {output_path}")
+    print(f"Total yes/no questions found: {len(processed_data)}")
 
 
 def process_vqa_rad(raw_dir=RAW_DATA_DIR, output_dir=PROCESSED_DATA_DIR, sample_size: int = None):
