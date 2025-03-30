@@ -11,7 +11,6 @@ from typing import Dict, Any, Optional, List
 import time
 import argparse
 from tqdm import tqdm
-import pathlib
 
 from medagentboard.utils.llm_configs import LLM_MODELS_SETTINGS
 from medagentboard.utils.encode_image import encode_image
@@ -831,6 +830,8 @@ def main():
                        help="Models used for doctor agents. Provide one model name per doctor.")
     args = parser.parse_args()
 
+    method = "ColaCare"
+
     # Extract dataset name from path
     dataset_name = args.dataset
     print(f"Dataset: {dataset_name}")
@@ -840,7 +841,7 @@ def main():
     print(f"QA Format: {qa_format}")
 
     # Create logs directory structure
-    logs_dir = os.path.join("logs", dataset_name, "multiple_choice" if qa_format == "mc" else "free-form")
+    logs_dir = os.path.join("logs", dataset_name, "multiple_choice" if qa_format == "mc" else "free-form", method)
     os.makedirs(logs_dir, exist_ok=True)
 
     # Load the data
