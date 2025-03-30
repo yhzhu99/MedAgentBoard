@@ -44,6 +44,7 @@ def cot_prompt(question: str):
 def inference(datatset, question, image_path, model_key, prompt_type):
     
     response_format = None
+    n_samples = 1
     
     if prompt_type == "zero_shot":
         prompt = zero_shot_prompt(question)
@@ -52,6 +53,10 @@ def inference(datatset, question, image_path, model_key, prompt_type):
     elif prompt_type == "cot":
         prompt = cot_prompt(question)
         response_format = {"type": "json_object"}
+    elif prompt_type == "cot-sc":
+        prompt = cot_prompt(question, options)
+        response_format = {"type": "json_object"}
+        n_samples = 5
     
     model_settings = LLM_MODELS_SETTINGS[model_key]
     client = OpenAI(
@@ -71,10 +76,19 @@ def inference(datatset, question, image_path, model_key, prompt_type):
                         {"role": "user", "content": user_message},
                     ],
                     response_format=response_format,
+                    n=n_samples,
                     stream=False
                 )
         
-    return response.choices[0].message.content
+    if prompt_type == "cot-sc":
+        answers = [response.choices[i].message.content for i in range(n_samples)]
+        options = [json.loads(answers[i])["Option"] for i in range(n_samples)]
+        counter = Counter(options)
+        
+        return counter.most_common(1)[0][0] # return the most common option only
+    
+    else:
+        return responses[0].choices[0].message.content
     
 if __name__ == "__main__":
     # get the dataset and prompt type from the arguments
