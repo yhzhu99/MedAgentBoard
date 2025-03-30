@@ -1,136 +1,599 @@
+"""
+medagentboard/medqa/single_llm.py
+
+Unified script for handling both text-only and vision-language model inference
+for medical question answering tasks. Supports multiple prompting techniques:
+- Zero-shot prompting
+- Few-shot prompting with examples
+- Chain-of-thought (CoT) prompting
+- Self-consistency (majority voting)
+- CoT with self-consistency
+
+Works with both multiple-choice and free-form questions, and can process
+image-based questions when an image path is provided.
+"""
+
 from openai import OpenAI
 import os
 import json
 import argparse
+from collections import Counter
+import time
 from tqdm import tqdm
-from dotenv import load_dotenv
-from utils import LLM_MODELS_SETTINGS
-# nohup python -m medqa.qa_model --dataset MedQA --prompt_type few_shot > MedQA_few_shot.log 2>&1 &
+from typing import Dict, Any, Optional, List, Union
 
-def zero_shot_prompt(question: str, options: dict):
-    prompt = f"Question: {question} \n" \
-        f"Options: {options} \n" \
-        f"Please respond only with a single selected option's letter, like A, B, C... \n"
-    return prompt
+from medagentboard.utils.llm_configs import LLM_MODELS_SETTINGS
+from medagentboard.utils.encode_image import encode_image
+from medagentboard.utils.json_utils import load_json, save_json
 
-def few_shot_prompt(dataset: str, question: str, options: dict):
-    if dataset == "MedQA":
-        examples = "Example 1: Question: A 23-year-old pregnant woman at 22 weeks gestation presents with burning upon urination. She states it started 1 day ago and has been worsening despite drinking more water and taking cranberry extract. She otherwise feels well and is followed by a doctor for her pregnancy. Her temperature is 97.7°F (36.5°C), blood pressure is 122/77 mmHg, pulse is 80/min, respirations are 19/min, and oxygen saturation is 98% on room air. Physical exam is notable for an absence of costovertebral angle tenderness and a gravid uterus. Which of the following is the best treatment for this patient? \n" \
-            "Options: [A: Ampicillin, B: Ceftriaxone, C: Ciprofloxacin, D: Doxycycline, E: Nitrofurantoin] \n" \
-            "Answer: E \n" \
-            "Example 2: Question: A 3-month-old baby died suddenly at night while asleep. His mother noticed that he had died only after she awoke in the morning. No cause of death was determined based on the autopsy. Which of the following precautions could have prevented the death of the baby?\n" \
-            "Options: [A: Placing the infant in a supine position on a firm mattress while sleeping, B: Routine postnatal electrocardiogram (ECG), C: Keeping the infant covered and maintaining a high room temperature, D: Application of a device to maintain the sleeping position, E: Avoiding pacifier use during sleep] \n" \
-            "Answer: A \n" \
-            
-    elif dataset == "PubMedQA":
-        examples = "Example 1: Question: The reduced use of sugars-containing (SC) liquid medicines has increased the use of other dose forms, potentially resulting in more widespread dental effects, including tooth wear. The aim of this study was to assess the erosive potential of 97 paediatric medicines in vitro. The study took the form of in vitro measurement of endogenous pH and titratable acidity (mmol). Endogenous pH was measured using a pH meter, followed by titration to pH 7.0 with 0.1-M NaOH. Overall, 55 (57%) formulations had an endogenous pH of<5.5. The mean (+/- SD) endogenous pH and titratable acidity for 41 SC formulations were 5.26 +/- 1.30 and 0.139 +/- 0.133 mmol, respectively; for 56 sugars-free (SF) formulations, these figures were 5.73 +/- 1.53 and 0.413 +/- 1.50 mmol (P>0.05). Compared with their SC bioequivalents, eight SF medicines showed no significant differences for pH or titratable acidity, while 15 higher-strength medicines showed lower pH (P = 0.035) and greater titratable acidity (P = 0.016) than their lower-strength equivalents. Chewable and dispersible tablets (P<0.001), gastrointestinal medicines (P = 0.002) and antibiotics (P = 0.007) were significant predictors of higher pH. In contrast, effervescent tablets (P<0.001), and nutrition and blood preparations (P = 0.021) were significant predictors of higher titratable acidity. Are sugars-free medicines more erosive than sugars-containing medicines? \n" \
-            "Options: [A: Yes, B: No, C: Maybe] \n" \
-            "Answer: B \n" \
-            "Example 2: Question: This investigation assesses the effect of platelet-rich plasma (PRP) gel on postoperative pain, swelling, and trismus as well as healing and bone regeneration potential on mandibular third molar extraction sockets. A prospective randomized comparative clinical study was undertaken over a 2-year period. Patients requiring surgical extraction of a single impacted third molar and who fell within the inclusion criteria and indicated willingness to return for recall visits were recruited. The predictor variable was application of PRP gel to the socket of the third molar in the test group, whereas the control group had no PRP. The outcome variables were pain, swelling, and maximum mouth opening, which were measured using a 10-point visual analog scale, tape, and millimeter caliper, respectively. Socket healing was assessed radiographically by allocating scores for lamina dura, overall density, and trabecular pattern. Quantitative data were presented as mean. Mann-Whitney test was used to compare means between groups for continuous variables, whereas Fischer exact test was used for categorical variables. Statistical significance was inferred at P<.05. Sixty patients aged 19 to 35 years (mean: 24.7 \u00b1 3.6 years) were divided into both test and control groups of 30 patients each. The mean postoperative pain score (visual analog scale) was lower for the PRP group at all time points and this was statistically significant (P<.05). Although the figures for swelling and interincisal mouth opening were lower in the test group, this difference was not statistically significant. Similarly, the scores for lamina dura, trabecular pattern, and bone density were better among patients in the PRP group. This difference was also not statistically significant. Can autologous platelet-rich plasma gel enhance healing after surgical extraction of mandibular third molars? \n" \
-            "Options: [A: Yes, B: No, C: Maybe] \n" \
-            "Answer: A \n"
-        
-    prompt = f"Question: {question} \n" \
-        f"Options: {options} \n" \
-        f"Please respond only with [the selected option's letter, like A, B, C...\n" \
-        f"Here are some examples for you reference: '''{examples}''' "
-        
-    return prompt
-    
-def cot_prompt(question: str, options: dict):
-    response_field = f"'Thought': [the step-by-step reasoning behind your answer] \n" \
-        f"'Option': [the letter of the selected option, like A, B, C, D]" \
 
-    prompt = f"Question: {question} \n" \
-        f"Options: {options} \n" \
-        f"Answer: Let's work this out in a step by step way to be sure we have the right answer. " \
-        f"Please give your answer in JSON format with the following two fields: '''{response_field}''' "
-    return prompt
+class SingleModelInference:
+    """
+    Unified class for running inference with a single LLM or VLLM model
+    using various prompting techniques.
+    """
 
-def inference(datatset, question, options, model_key, prompt_type):
-    
-    response_format = None
-    n_samples = 1
-    
-    if prompt_type == "zero_shot":
-        prompt = zero_shot_prompt(question, options)
-    elif prompt_type == "few_shot":
-        prompt = few_shot_prompt(dataset, question, options)
-    elif prompt_type == "cot":
-        prompt = cot_prompt(question, options)
-        response_format = {"type": "json_object"}
-    elif prompt_type == "cot-sc":
-        prompt = cot_prompt(question, options)
-        response_format = {"type": "json_object"}
-        n_samples = 5
-    
-    model_settings = LLM_MODELS_SETTINGS[model_key]
-    client = OpenAI(
+    def __init__(self, model_key: str = "qwen-max-latest"):
+        """
+        Initialize the inference handler.
+
+        Args:
+            model_key: Key identifying the model in LLM_MODELS_SETTINGS
+        """
+        self.model_key = model_key
+
+        if model_key not in LLM_MODELS_SETTINGS:
+            raise ValueError(f"Model key '{model_key}' not found in LLM_MODELS_SETTINGS")
+
+        # Set up OpenAI client based on model settings
+        model_settings = LLM_MODELS_SETTINGS[model_key]
+        self.client = OpenAI(
             api_key=model_settings["api_key"],
             base_url=model_settings["base_url"],
         )
-    
-    response = client.chat.completions.create(
-                    model=model_settings["model_name"],
-                    messages=[
-                        {"role": "system", "content": "You will be answering a medical MCQ question."},
-                        {"role": "user", "content": prompt},
-                    ],
+        self.model_name = model_settings["model_name"]
+        print(f"Initialized SingleModelInference with model: {model_key}")
+
+    def _call_llm(self,
+                 system_message: str,
+                 user_message: Union[str, List],
+                 response_format: Optional[Dict] = None,
+                 n_samples: int = 1,
+                 max_retries: int = 3) -> List[str]:
+        """
+        Call the LLM with messages and handle retries.
+
+        Args:
+            system_message: System message setting context
+            user_message: User message (text or multimodal content)
+            response_format: Optional format specification for response
+            n_samples: Number of samples to generate
+            max_retries: Maximum number of retry attempts
+
+        Returns:
+            List of LLM response texts
+        """
+        retries = 0
+        while retries < max_retries:
+            try:
+                messages = [
+                    {"role": "system", "content": system_message},
+                    {"role": "user", "content": user_message}
+                ]
+
+                completion = self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=messages,
                     response_format=response_format,
-                    n = n_samples,
+                    n=n_samples,
                     stream=False
                 )
-    
-    if prompt_type == "cot-sc":
-        answers = [response.choices[i].message.content for i in range(n_samples)]
-        options = [json.loads(answers[i])["Option"] for i in range(n_samples)]
-        counter = Counter(options)
-        
-        return counter.most_common(1)[0][0] # return the most common option only
-    
-    else:
-        return responses[0].choices[0].message.content
-    
-if __name__ == "__main__":
-    # get the dataset and prompt type from the arguments
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset", type=str, help="Dataset to use for testing")
-    parser.add_argument("--prompt_type", type=str, help="Prompt type to use for testing")
-    parser.add_argument("--model_name", type=str, help="Model name to use for inference")
-    parser.add_argument("--start_pos", type=int, help="Starting position of the file")
-    parser.add_argument("--end_pos", type=int, help="Ending position of the file")
-    args = parser.parse_args()
-    
-    dataset = args.dataset # ["MedQA", "PubMedQA"]
-    prompt_type = args.prompt_type # ["zero_shot", "few_shot", "cot"]
-    model_name = args.model_name
-    start_pos = args.start_pos
-    end_pos = args.end_pos
-    
-    data_path = f"./cleaned_datasets/{dataset.lower()}.json"
-    output_path = f"./output/{dataset}/{prompt_type}.json"
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    print(f"Output file created at: {output_path}")
-    
-    # load the data
-    with open(data_path, "r") as file:
-        data = [json.loads(line) for line in file]
-    
-    # get the data based on the start and end position
-    data = data[start_pos:end_pos] if end_pos != -1 else data[start_pos:]
-    total_lines = len(data)
-        
-    with open(output_path, "a") as output_file:
-        
-        for datum in tqdm(data, total=total_lines, desc=f"Testing on {dataset} with {prompt_type}"):
-            model_answer = inference(dataset, datum["question"], datum["options"], model_name, prompt_type)
-            
-            output = {
-                "qid": datum["qid"],
-                "question": datum["question"],
-                "ground_truth": datum["answer"],
-                "model_answer": model_answer
+
+                responses = [choice.message.content for choice in completion.choices]
+                return responses
+
+            except Exception as e:
+                retries += 1
+                print(f"LLM API call error (attempt {retries}/{max_retries}): {e}")
+                if retries >= max_retries:
+                    raise Exception(f"LLM API call failed after {max_retries} attempts: {e}")
+                time.sleep(1)  # Brief pause before retrying
+
+    def _prepare_user_message(self,
+                            prompt: str,
+                            image_path: Optional[str] = None) -> Union[str, List]:
+        """
+        Prepare user message with optional image content.
+
+        Args:
+            prompt: Text prompt
+            image_path: Optional path to image
+
+        Returns:
+            User message as string or list for multimodal content
+        """
+        if image_path:
+            try:
+                base64_image = encode_image(image_path)
+                return [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
+                ]
+            except Exception as e:
+                print(f"Error encoding image {image_path}: {e}")
+                # Fall back to text-only if image encoding fails
+                return prompt
+        else:
+            return prompt
+
+    def zero_shot_prompt(self,
+                        question: str,
+                        options: Optional[Dict[str, str]] = None) -> str:
+        """
+        Create a zero-shot prompt for either multiple-choice or free-form questions.
+
+        Args:
+            question: Question text
+            options: Optional multiple choice options
+
+        Returns:
+            Formatted prompt string
+        """
+        if options:
+            # Multiple choice
+            options_text = "\n".join([f"{k}: {v}" for k, v in options.items()])
+            prompt = (
+                f"Question: {question}\n\n"
+                f"Options:\n{options_text}\n\n"
+                f"Please respond with the letter of the correct option (A, B, C, etc.) only."
+            )
+        else:
+            # Free form
+            prompt = (
+                f"Question: {question}\n\n"
+                f"Please provide a concise and accurate answer."
+            )
+
+        return prompt
+
+    def few_shot_prompt(self,
+                       question: str,
+                       options: Optional[Dict[str, str]] = None,
+                       dataset: str = "MedQA") -> str:
+        """
+        Create a few-shot prompt with examples relevant to the dataset.
+
+        Args:
+            question: Question text
+            options: Optional multiple choice options
+            dataset: Dataset name to select appropriate examples
+
+        Returns:
+            Formatted prompt string with examples
+        """
+        # Define example pairs for different datasets and question types
+        examples = {
+            "MedQA_mc": (
+                "Example 1: Question: A 23-year-old pregnant woman at 22 weeks gestation presents with burning upon urination. "
+                "She states it started 1 day ago and has been worsening despite drinking more water and taking cranberry extract. "
+                "She otherwise feels well and is followed by a doctor for her pregnancy. Her temperature is 97.7°F (36.5°C), "
+                "blood pressure is 122/77 mmHg, pulse is 80/min, respirations are 19/min, and oxygen saturation is 98% on room air. "
+                "Physical exam is notable for an absence of costovertebral angle tenderness and a gravid uterus. "
+                "Which of the following is the best treatment for this patient?\n"
+                "Options:\n"
+                "A: Ampicillin\n"
+                "B: Ceftriaxone\n"
+                "C: Ciprofloxacin\n"
+                "D: Doxycycline\n"
+                "E: Nitrofurantoin\n"
+                "Answer: E\n\n"
+
+                "Example 2: Question: A 3-month-old baby died suddenly at night while asleep. His mother noticed that he had died "
+                "only after she awoke in the morning. No cause of death was determined based on the autopsy. "
+                "Which of the following precautions could have prevented the death of the baby?\n"
+                "Options:\n"
+                "A: Placing the infant in a supine position on a firm mattress while sleeping\n"
+                "B: Routine postnatal electrocardiogram (ECG)\n"
+                "C: Keeping the infant covered and maintaining a high room temperature\n"
+                "D: Application of a device to maintain the sleeping position\n"
+                "E: Avoiding pacifier use during sleep\n"
+                "Answer: A"
+            ),
+
+            "PubMedQA_mc": (
+                "Example 1: Question: Are sugars-free medicines more erosive than sugars-containing medicines?\n"
+                "Options:\n"
+                "A: Yes\n"
+                "B: No\n"
+                "C: Maybe\n"
+                "Answer: B\n\n"
+
+                "Example 2: Question: Can autologous platelet-rich plasma gel enhance healing after surgical extraction of mandibular third molars?\n"
+                "Options:\n"
+                "A: Yes\n"
+                "B: No\n"
+                "C: Maybe\n"
+                "Answer: A"
+            ),
+
+            "PubMedQA_ff": (
+                "Example 1: Question: Does melatonin supplementation improve sleep quality in adults with primary insomnia?\n"
+                "Answer: Yes, melatonin supplementation has been shown to improve sleep quality parameters in adults with primary insomnia, "
+                "including reduced sleep onset latency, increased total sleep time, and improved overall sleep quality without significant adverse effects.\n\n"
+
+                "Example 2: Question: Is chronic stress associated with increased risk of cardiovascular disease?\n"
+                "Answer: Yes, chronic stress is associated with increased risk of cardiovascular disease through multiple mechanisms, "
+                "including elevated blood pressure, increased inflammation, endothelial dysfunction, and unhealthy behavioral coping mechanisms."
+            ),
+
+            "PathVQA_mc": (
+                "Example 1: Question: Are bile duct cells stained with this immunohistochemical marker?\n"
+                "Options:\n"
+                "A: Yes\n"
+                "B: No\n"
+                "Answer: A\n\n"
+
+                "Example 2: Question: Is this a well-differentiated tumor?\n"
+                "Options:\n"
+                "A: Yes\n"
+                "B: No\n"
+                "Answer: B"
+            ),
+
+            "VQA-RAD_mc": (
+                "Example 1: Question: Is there evidence of pneumonia in this chest X-ray?\n"
+                "Options:\n"
+                "A: Yes\n"
+                "B: No\n"
+                "Answer: A\n\n"
+
+                "Example 2: Question: Is the heart size enlarged in this radiograph?\n"
+                "Options:\n"
+                "A: Yes\n"
+                "B: No\n"
+                "Answer: B"
+            ),
+
+            "VQA-RAD_ff": (
+                "Example 1: Question: What abnormality is visible in this CT scan of the abdomen?\n"
+                "Answer: The CT scan shows a hypodense mass in the liver, approximately 3cm in diameter, with irregular borders, "
+                "suggestive of a hepatocellular carcinoma. There is also mild splenomegaly but no ascites.\n\n"
+
+                "Example 2: Question: What is the primary finding in this chest X-ray?\n"
+                "Answer: The chest X-ray demonstrates right upper lobe consolidation with air bronchograms, "
+                "consistent with lobar pneumonia. No pleural effusion or pneumothorax is identified."
+            )
+        }
+
+        # Determine which example set to use
+        example_key = f"{dataset}_mc" if options else f"{dataset}_ff"
+
+        # Fallbacks if specific dataset examples are not available
+        if example_key not in examples:
+            if options:
+                example_key = "MedQA_mc"  # Default MC examples
+            else:
+                example_key = "PubMedQA_ff"  # Default FF examples
+
+        example_text = examples[example_key]
+
+        # Format options if provided
+        if options:
+            options_text = "\n".join([f"{k}: {v}" for k, v in options.items()])
+            prompt = (
+                f"Question: {question}\n\n"
+                f"Options:\n{options_text}\n\n"
+                f"Please respond with the letter of the correct option (A, B, C, etc.) only.\n\n"
+                f"Here are some examples for your reference:\n\n{example_text}"
+            )
+        else:
+            prompt = (
+                f"Question: {question}\n\n"
+                f"Please provide a concise and accurate answer.\n\n"
+                f"Here are some examples for your reference:\n\n{example_text}"
+            )
+
+        return prompt
+
+    def cot_prompt(self,
+                  question: str,
+                  options: Optional[Dict[str, str]] = None) -> str:
+        """
+        Create a chain-of-thought prompt that encourages step-by-step reasoning.
+
+        Args:
+            question: Question text
+            options: Optional multiple choice options
+
+        Returns:
+            Formatted CoT prompt string
+        """
+        if options:
+            options_text = "\n".join([f"{k}: {v}" for k, v in options.items()])
+            response_format = (
+                "{\n"
+                "  \"Thought\": \"step-by-step reasoning process\",\n"
+                "  \"Answer\": \"selected option letter (A, B, C, etc.)\"\n"
+                "}"
+            )
+
+            prompt = (
+                f"Question: {question}\n\n"
+                f"Options:\n{options_text}\n\n"
+                f"Let's work through this step-by-step to find the correct answer.\n\n"
+                f"Please provide your response in JSON format as follows:\n{response_format}"
+            )
+        else:
+            response_format = (
+                "{\n"
+                "  \"Thought\": \"step-by-step reasoning process\",\n"
+                "  \"Answer\": \"final answer to the question\"\n"
+                "}"
+            )
+
+            prompt = (
+                f"Question: {question}\n\n"
+                f"Let's work through this step-by-step to find the correct answer.\n\n"
+                f"Please provide your response in JSON format as follows:\n{response_format}"
+            )
+
+        return prompt
+
+    def process_item(self,
+                    item: Dict[str, Any],
+                    prompt_type: str,
+                    dataset: str) -> Dict[str, Any]:
+        """
+        Process a single item using the specified prompting technique.
+
+        Args:
+            item: Input data dictionary with question, options, etc.
+            prompt_type: Type of prompting to use
+            dataset: Dataset name
+
+        Returns:
+            Result dictionary with predicted answer and metadata
+        """
+        start_time = time.time()
+
+        # Extract item fields
+        qid = item.get("qid", "unknown")
+        question = item.get("question", "")
+        options = item.get("options")
+        image_path = item.get("image_path")
+        ground_truth = item.get("answer", "")
+
+        print(f"Processing {qid} with {prompt_type} prompting")
+
+        # Determine if it's a multiple-choice or free-form question
+        is_mc = options is not None
+
+        # Set system message based on task type
+        if image_path:
+            system_message = "You are a medical vision expert analyzing medical images and answering questions about them."
+        else:
+            system_message = "You are a medical expert answering medical questions with precise and accurate information."
+
+        # Generate prompt based on technique
+        if prompt_type == "zero_shot":
+            prompt = self.zero_shot_prompt(question, options)
+            response_format = None
+            n_samples = 1
+
+        elif prompt_type == "few_shot":
+            prompt = self.few_shot_prompt(question, options, dataset)
+            response_format = None
+            n_samples = 1
+
+        elif prompt_type == "cot":
+            prompt = self.cot_prompt(question, options)
+            response_format = {"type": "json_object"}
+            n_samples = 1
+
+        elif prompt_type == "self_consistency":
+            # For self-consistency, use zero-shot but with multiple samples
+            prompt = self.zero_shot_prompt(question, options)
+            response_format = None
+            n_samples = 3
+
+        elif prompt_type == "cot_sc":
+            # For CoT with self-consistency, use CoT with multiple samples
+            prompt = self.cot_prompt(question, options)
+            response_format = {"type": "json_object"}
+            n_samples = 3
+
+        else:
+            raise ValueError(f"Unknown prompt type: {prompt_type}")
+
+        # Prepare user message (text-only or multimodal)
+        user_message = self._prepare_user_message(prompt, image_path)
+
+        # Call LLM to get responses
+        responses = self._call_llm(
+            system_message=system_message,
+            user_message=user_message,
+            response_format=response_format,
+            n_samples=n_samples
+        )
+
+        # Process responses based on prompt type
+        if prompt_type in ["cot", "cot_sc"]:
+            # Extract answers from JSON responses
+            parsed_responses = []
+
+            for response in responses:
+                try:
+                    parsed = json.loads(response)
+                    thought = parsed.get("Thought", "") or parsed.get("thought", "")
+                    answer = parsed.get("Answer", "") or parsed.get("answer", "")
+                    parsed_responses.append({"thought": thought, "answer": answer})
+                except json.JSONDecodeError:
+                    # Fallback parsing for malformed JSON
+                    lines = response.strip().split('\n')
+                    thought = ""
+                    answer = ""
+
+                    for line in lines:
+                        if "thought" in line.lower() and ":" in line:
+                            thought = line.split(":", 1)[1].strip()
+                        elif "answer" in line.lower() and ":" in line:
+                            answer = line.split(":", 1)[1].strip()
+
+                    parsed_responses.append({"thought": thought, "answer": answer})
+
+            if prompt_type == "cot":
+                # For CoT, use the first response
+                predicted_answer = parsed_responses[0]["answer"]
+                reasoning = parsed_responses[0]["thought"]
+            else:
+                # For CoT-SC, use majority voting on answers
+                answers = [r["answer"] for r in parsed_responses]
+                answer_counts = Counter(answers)
+                predicted_answer = answer_counts.most_common(1)[0][0]
+
+                # Collect all reasoning paths
+                reasoning = "\n\n".join([f"Path {i+1}: {r['thought']}" for i, r in enumerate(parsed_responses)])
+
+        elif prompt_type == "self_consistency":
+            # For self-consistency, use majority voting
+            answer_counts = Counter(responses)
+            predicted_answer = answer_counts.most_common(1)[0][0]
+            reasoning = f"Majority vote from {n_samples} samples: {dict(answer_counts)}"
+
+        else:
+            # For zero-shot and few-shot, use the first response
+            predicted_answer = responses[0].strip()
+            reasoning = "Direct answer, no explicit reasoning"
+
+        # Clean up the predicted answer (extract just the option letter for MC)
+        if is_mc and len(predicted_answer) > 1:
+            # Look for option letters in the answer
+            for option in options.keys():
+                if option in predicted_answer or option.lower() in predicted_answer.lower():
+                    predicted_answer = option
+                    break
+
+        # Calculate processing time
+        processing_time = time.time() - start_time
+
+        # Prepare the result structure to match ColaCare's format
+        result = {
+            "qid": qid,
+            "timestamp": int(time.time()),
+            "question": question,
+            "options": options,
+            "ground_truth": ground_truth,
+            "predicted_answer": predicted_answer,
+            "case_history": {
+                "reasoning": reasoning,
+                "prompt_type": prompt_type,
+                "model": self.model_key,
+                "processing_time": processing_time,
+                "raw_responses": responses
             }
-            
-            json.dump(output, output_file)
-            output_file.write("\n")
+        }
+
+        return result
+
+
+def main():
+    """
+    Main function to process medical QA datasets with various prompting techniques.
+    """
+    parser = argparse.ArgumentParser(description="Run single model inference on medical datasets")
+    parser.add_argument("--dataset", type=str, required=True, help="Dataset name (MedQA, PubMedQA, PathVQA, VQA-RAD)")
+    parser.add_argument("--qa_type", type=str, choices=["mc", "ff"], required=True,
+                       help="QA type: multiple-choice (mc) or free-form (ff)")
+    parser.add_argument("--prompt_type", type=str, required=True,
+                       choices=["zero_shot", "few_shot", "cot", "self_consistency", "cot_sc"],
+                       help="Prompting technique to use")
+    parser.add_argument("--model_key", type=str, default="qwen-max-latest",
+                       help="Model key from LLM_MODELS_SETTINGS")
+    args = parser.parse_args()
+
+    # Dataset and QA type
+    dataset_name = args.dataset
+    qa_type = args.qa_type
+    prompt_type = args.prompt_type
+    model_key = args.model_key
+
+    print(f"Dataset: {dataset_name}")
+    print(f"QA Type: {qa_type}")
+    print(f"Prompt Type: {prompt_type}")
+    print(f"Model: {model_key}")
+
+    # Method name for logging
+    method = f"SingleLLM_{prompt_type}"
+
+    # Set up data path
+    data_path = f"./my_datasets/processed/{dataset_name}/medqa_{qa_type}.json"
+
+    # Set up logs directory
+    qa_format_dir = "multiple_choice" if qa_type == "mc" else "free-form"
+    logs_dir = os.path.join("logs", dataset_name, qa_format_dir, method)
+    os.makedirs(logs_dir, exist_ok=True)
+
+    print(f"Data path: {data_path}")
+    print(f"Logs directory: {logs_dir}")
+
+    # Initialize the model
+    model = SingleModelInference(model_key=model_key)
+
+    # Load the data
+    data = load_json(data_path)
+    print(f"Loaded {len(data)} items from {data_path}")
+
+    # Track stats
+    processed_count = 0
+    skipped_count = 0
+    error_count = 0
+    correct_count = 0
+
+    # Process each item
+    for item in tqdm(data, desc=f"Processing {dataset_name} with {prompt_type}"):
+        pid = item["qid"]
+
+        # Skip if already processed
+        result_path = os.path.join(logs_dir, f"{pid}-result.json")
+        if os.path.exists(result_path):
+            print(f"Skipping {pid} - already processed")
+            skipped_count += 1
+            continue
+
+        try:
+            # Process the item
+            result = model.process_item(
+                item=item,
+                prompt_type=prompt_type,
+                dataset=dataset_name
+            )
+
+            # Save the result
+            save_json(result, result_path)
+
+            # Update stats
+            processed_count += 1
+            if result["predicted_answer"] == result["ground_truth"]:
+                correct_count += 1
+
+        except Exception as e:
+            print(f"Error processing item {pid}: {e}")
+            error_count += 1
+
+    # Print summary
+    print("\n" + "="*50)
+    print(f"Processing Summary for {dataset_name} ({qa_type}) with {prompt_type}:")
+    print(f"Total items: {len(data)}")
+    print(f"Processed: {processed_count}")
+    print(f"Skipped (already processed): {skipped_count}")
+    print(f"Errors: {error_count}")
+
+    if processed_count > 0:
+        accuracy = (correct_count / processed_count) * 100
+        print(f"Accuracy of processed items: {accuracy:.2f}%")
+
+    print("="*50)
+
+
+if __name__ == "__main__":
+    main()
