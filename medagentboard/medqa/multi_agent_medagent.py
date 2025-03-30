@@ -130,7 +130,7 @@ class ExpertGathererAgent(BaseAgent):
             "content": "You are a medical expert who specializes in categorizing a specific medical scenario into specific areas of medicine. "
                       "You need to complete the following steps: "
                       "1. Carefully read the medical scenario presented in the question. "
-                      "2. Based on the medical scenario in it, classify the question into five different subfields of medicine. "
+                      "2. Based on the medical scenario in it, classify the question into three different subfields of medicine. "
                       "3. You should output in JSON format with a 'fields' array containing the medical specialties."
         }
 
