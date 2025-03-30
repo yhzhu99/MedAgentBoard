@@ -1,3 +1,12 @@
+<<<<<<< HEAD:medagentboard/medqa/run.sh
+llm_model_name="deepseek-v3-ark"
+vllm_model_name="qwen-vl-max"
+meta_model_name="deepseek-v3-ark"
+decision_model_name="deepseek-v3-ark"
+doctor1_model_name_llm="deepseek-v3-ark"
+doctor2_model_name_llm="deepseek-v3-ark"
+doctor3_model_name_llm="deepseek-v3-ark"
+=======
 llm_model_name="deepseek-v3-huoshan"
 vllm_model_name="qwen-vl-max"
 meta_model_name="deepseek-v3-huoshan"
@@ -5,6 +14,7 @@ decision_model_name="deepseek-v3-huoshan"
 doctor1_model_name_llm="deepseek-v3-huoshan"
 doctor2_model_name_llm="deepseek-v3-huoshan"
 doctor3_model_name_llm="deepseek-v3-huoshan"
+>>>>>>> 89f252bded83abc0297909a7dd901bb18de90e1c:medqa/run.sh
 doctor1_model_name_vllm="qwen-vl-max"
 doctor2_model_name_vllm="qwen-vl-max"
 doctor3_model_name_vllm="qwen-vl-max"
