@@ -18,9 +18,11 @@ from medagentboard.utils.json_utils import load_json, save_json
 
 class MedicalSpecialty(Enum):
     """Medical specialty enumeration."""
-    INTERNAL_MEDICINE = "Internal Medicine"
-    SURGERY = "Surgery"
-    RADIOLOGY = "Radiology"
+    PEDIATRICS = "Pediatrics"
+    CARDIOLOGY = "Cardiology"
+    PULMONOLOGY = "Pulmonology"
+    NEONATOLOGY = "Neonatology"
+    GENETICS = "Genetics"
 
 
 class AgentType(Enum):
@@ -28,6 +30,7 @@ class AgentType(Enum):
     DOCTOR = "Doctor"
     META = "Coordinator"
     DECISION_MAKER = "Decision Maker"
+    EXPERT_GATHERER = "Expert Gatherer"
 
 
 class BaseAgent:
@@ -95,6 +98,97 @@ class BaseAgent:
                 time.sleep(1)  # Brief pause before retrying
 
 
+class ExpertGathererAgent(BaseAgent):
+    """Agent responsible for gathering domain experts based on medical questions."""
+
+    def __init__(self, agent_id: str, model_key: str = "qwen-vl-max"):
+        """
+        Initialize the expert gatherer agent.
+
+        Args:
+            agent_id: Unique identifier for the agent
+            model_key: LLM model to use
+        """
+        super().__init__(agent_id, AgentType.EXPERT_GATHERER, model_key)
+        print(f"Initializing expert gatherer agent, ID: {agent_id}, Model: {model_key}")
+
+    def gather_question_domain_experts(self, question: str) -> List[MedicalSpecialty]:
+        """
+        Gather relevant domain experts for a medical question.
+
+        Args:
+            question: Medical question to analyze
+
+        Returns:
+            List of MedicalSpecialty enums representing relevant experts
+        """
+        print(f"Expert gatherer {self.agent_id} gathering question domain experts")
+
+        # Prepare system message based on paper's prompt design
+        system_message = {
+            "role": "system",
+            "content": "You are a medical expert who specializes in categorizing a specific medical scenario into specific areas of medicine. "
+                      "You need to complete the following steps: "
+                      "1. Carefully read the medical scenario presented in the question. "
+                      "2. Based on the medical scenario in it, classify the question into five different subfields of medicine. "
+                      "3. You should output in JSON format with a 'fields' array containing the medical specialties."
+        }
+
+        # Prepare user message
+        user_message = {
+            "role": "user",
+            "content": f"Please analyze this medical question and identify the three most relevant medical specialties needed to answer it:\n\n{question}"
+        }
+
+        # Call LLM with retry mechanism
+        response_text = self.call_llm(system_message, user_message)
+
+        # Parse response
+        try:
+            result = json.loads(response_text)
+            specialties = result.get("fields", [])
+
+            # Convert string specialties to MedicalSpecialty enum
+            valid_specialties = []
+            for spec in specialties:
+                try:
+                    # Handle variations in specialty names
+                    spec_lower = spec.lower().strip()
+                    if "pediatr" in spec_lower:
+                        valid_specialties.append(MedicalSpecialty.PEDIATRICS)
+                    elif "cardio" in spec_lower:
+                        valid_specialties.append(MedicalSpecialty.CARDIOLOGY)
+                    elif "pulmon" in spec_lower:
+                        valid_specialties.append(MedicalSpecialty.PULMONOLOGY)
+                    elif "neonat" in spec_lower:
+                        valid_specialties.append(MedicalSpecialty.NEONATOLOGY)
+                    elif "genet" in spec_lower:
+                        valid_specialties.append(MedicalSpecialty.GENETICS)
+                except ValueError:
+                    print(f"Warning: Could not map specialty '{spec}' to known MedicalSpecialty")
+
+            # Ensure we have exactly 3 specialties as per paper
+            if len(valid_specialties) < 3:
+                # Fill with default specialties if needed
+                default_specialties = [
+                    MedicalSpecialty.PEDIATRICS,
+                    MedicalSpecialty.CARDIOLOGY,
+                    MedicalSpecialty.PULMONOLOGY,
+                    MedicalSpecialty.NEONATOLOGY,
+                    MedicalSpecialty.GENETICS
+                ]
+                valid_specialties = valid_specialties + default_specialties[len(valid_specialties):3]
+
+            return valid_specialties[:3]  # Return exactly 3 specialties
+
+        except json.JSONDecodeError:
+            print("Expert gatherer response is not valid JSON, using fallback specialties")
+            # Return default specialties if parsing fails
+            return [
+                MedicalSpecialty.CARDIOLOGY,
+                MedicalSpecialty.PULMONOLOGY,
+                MedicalSpecialty.NEONATOLOGY,
+            ]
 
 
 class DoctorAgent(BaseAgent):
@@ -261,7 +355,7 @@ class DoctorAgent(BaseAgent):
 class MetaAgent(BaseAgent):
     """Meta agent that synthesizes multiple doctors' opinions."""
 
-    def __init__(self, agent_id: str, model_key: str = "qwen-max-latest"):
+    def __init__(self, agent_id: str, model_key: str = "qwen-vl-max"):
         """
         Initialize a meta agent.
 
@@ -450,7 +544,7 @@ class MDTConsultation:
 
     def __init__(self,
                 max_rounds: int = 3,
-                doctor_configs: List[Dict] = None,
+                model_key: str = "qwen-max-latest",
                 meta_model_key: str = "qwen-max-latest",
                 decision_model_key: str = "qwen-max-latest"):
         """
@@ -458,27 +552,21 @@ class MDTConsultation:
 
         Args:
             max_rounds: Maximum number of discussion rounds
-            doctor_configs: List of dictionaries specifying each doctor's specialty and model_key
-            meta_model_key: LLM model for meta agent (text-only is sufficient)
-            decision_model_key: LLM model for decision making agent (text-only is sufficient)
+            model_key: LLM model for doctor agents
+            meta_model_key: LLM model for meta agent
+            decision_model_key: LLM model for decision making agent
         """
         self.max_rounds = max_rounds
-        self.doctor_configs = doctor_configs or [
-            {"specialty": MedicalSpecialty.INTERNAL_MEDICINE, "model_key": "qwen-vl-max"},
-            {"specialty": MedicalSpecialty.SURGERY, "model_key": "qwen-vl-max"},
-            {"specialty": MedicalSpecialty.RADIOLOGY, "model_key": "qwen-vl-max"},
-        ]
+        self.model_key = model_key
         self.meta_model_key = meta_model_key
         self.decision_model_key = decision_model_key
 
-        # Initialize doctor agents with different specialties and models
+        # Initialize expert gatherer agent
+        self.expert_gatherer = ExpertGathererAgent("expert_gatherer", model_key)
+
+        # Initialize other agents (doctors will be initialized dynamically)
         self.doctor_agents = []
-        for idx, config in enumerate(self.doctor_configs, 1):
-            agent_id = f"doctor_{idx}"
-            specialty = config["specialty"]
-            model_key = config.get("model_key", "qwen-vl-max")
-            doctor_agent = DoctorAgent(agent_id, specialty, model_key)
-            self.doctor_agents.append(doctor_agent)
+        self.doctor_specialties = []
 
         # Initialize meta agent
         self.meta_agent = MetaAgent("meta", meta_model_key)
@@ -486,22 +574,22 @@ class MDTConsultation:
         # Initialize decision making agent
         self.decision_agent = DecisionMakingAgent("decision", decision_model_key)
 
-        # Store doctor specialties for easy access
-        self.doctor_specialties = [doctor.specialty for doctor in self.doctor_agents]
+        print(f"Initialized MDT consultation, max_rounds={max_rounds}, model={model_key}")
 
-        # Prepare doctor info for logging
-        doctor_info = ", ".join([
-            f"{config['specialty'].value} ({config.get('model_key', 'default')})"
-            for config in self.doctor_configs
-        ])
-        print(f"Initialized MDT consultation, max_rounds={max_rounds}, doctors: [{doctor_info}], meta_model={meta_model_key}, decision_model={decision_model_key}")
+    def _initialize_doctor_agents(self, specialties: List[MedicalSpecialty]):
+        """Initialize doctor agents with the given specialties."""
+        self.doctor_agents = []
+        for idx, specialty in enumerate(specialties, 1):
+            agent_id = f"doctor_{idx}"
+            doctor_agent = DoctorAgent(agent_id, specialty, self.model_key)
+            self.doctor_agents.append(doctor_agent)
+        self.doctor_specialties = specialties
 
     def run_consultation(self,
                         qid: str,
                         question: str,
                         options: Optional[Dict[str, str]] = None,
-                        image_path: Optional[str] = None,
-                        gt_answer: Optional[str] = None) -> Dict[str, Any]:
+                        image_path: Optional[str] = None) -> Dict[str, Any]:
         """
         Run the MDT consultation process.
 
@@ -510,7 +598,6 @@ class MDTConsultation:
             question: Question about the case
             options: Optional multiple choice options
             image_path: Optional path to medical image
-            gt_answer: Optional ground truth answer (for evaluation)
 
         Returns:
             Dictionary containing final consultation result
@@ -520,15 +607,16 @@ class MDTConsultation:
         if options:
             print(f"Options: {options}")
 
+        # Step 1: Gather relevant domain experts for this question
+        specialties = self.expert_gatherer.gather_question_domain_experts(question)
+        print(f"Gathered specialties for question: {[s.value for s in specialties]}")
+
+        # Initialize doctor agents with these specialties
+        self._initialize_doctor_agents(specialties)
+
         # Case consultation history
         case_history = {
-            "qid": qid,
-            "timestamp": int(time.time()),
-            "case": {
-                "question": question,
-                "options": options,
-                "gt_answer": gt_answer
-            },
+            "selected_specialties": [s.value for s in specialties],
             "rounds": []
         }
 
@@ -545,7 +633,7 @@ class MDTConsultation:
 
             round_data = {"round": current_round, "opinions": [], "synthesis": None, "reviews": []}
 
-            # Step 1: Each doctor analyzes the case
+            # Step 2: Each doctor analyzes the case
             doctor_opinions = []
             for i, doctor in enumerate(self.doctor_agents):
                 print(f"Doctor {i+1} ({doctor.specialty.value}) analyzing case")
@@ -559,16 +647,16 @@ class MDTConsultation:
 
                 print(f"Doctor {i+1} opinion: {opinion.get('answer', '')}")
 
-            # Step 2: Meta agent synthesizes opinions without providing an answer
+            # Step 3: Meta agent synthesizes opinions without providing an answer
             print("Meta agent synthesizing opinions")
             synthesis = self.meta_agent.synthesize_opinions(
                 doctor_opinions, self.doctor_specialties, current_round
             )
             round_data["synthesis"] = synthesis
 
-            print(f"Meta agent synthesis created")
+            print("Meta agent synthesis created")
 
-            # Step 3: Doctors review synthesis
+            # Step 4: Doctors review synthesis
             doctor_reviews = []
             all_agree = True
             for i, doctor in enumerate(self.doctor_agents):
@@ -591,7 +679,7 @@ class MDTConsultation:
 
             # If all doctors agree or this is the last round, make final decision
             if all_agree or current_round == self.max_rounds:
-                # Step 4: Decision making agent provides final answer
+                # Step 5: Decision making agent provides final answer
                 print("Decision making agent generating final answer")
                 final_decision = self.decision_agent.make_decision(question, synthesis, options, image_path)
 
@@ -654,13 +742,13 @@ def parse_structured_output(response_text: str) -> Dict[str, str]:
         return result
 
 
-def process_input(item, doctor_configs=None, meta_model_key="qwen-max-latest", decision_model_key="qwen-max-latest"):
+def process_input(item, model_key="qwen-vl-max", meta_model_key="qwen-max-latest", decision_model_key="qwen-max-latest"):
     """
     Process input data based on its structure.
 
     Args:
         item: Input data dictionary with question, options, etc.
-        doctor_configs: List of doctor configurations (specialty and model_key)
+        model_key: Model key for the doctor agents
         meta_model_key: Model key for the meta agent
         decision_model_key: Model key for the decision making agent
 
@@ -679,7 +767,7 @@ def process_input(item, doctor_configs=None, meta_model_key="qwen-max-latest", d
     # Initialize consultation
     mdt = MDTConsultation(
         max_rounds=3,
-        doctor_configs=doctor_configs,
+        model_key=model_key,
         meta_model_key=meta_model_key,
         decision_model_key=decision_model_key
     )
@@ -690,7 +778,6 @@ def process_input(item, doctor_configs=None, meta_model_key="qwen-max-latest", d
         question=question,
         options=options,
         image_path=image_path,
-        gt_answer=gt_answer
     )
 
     return result
@@ -705,12 +792,12 @@ def main():
                        help="Specify if the dataset contains images (like PathVQA or VQA-RAD)")
     parser.add_argument("--qa_type", type=str, choices=["mc", "ff"], required=True,
                        help="QA type: multiple-choice (mc) or free-form (ff)")
+    parser.add_argument("--model", type=str, default="qwen-vl-max",
+                       help="Model used for doctor agents")
     parser.add_argument("--meta_model", type=str, default="qwen-max-latest",
                        help="Model used for meta agent")
     parser.add_argument("--decision_model", type=str, default="qwen-max-latest",
                        help="Model used for decision making agent")
-    parser.add_argument("--doctor_models", nargs='+', default=["qwen-vl-max", "qwen-vl-max", "qwen-vl-max"],
-                       help="Models used for doctor agents. Provide one model name per doctor.")
     args = parser.parse_args()
 
     method = "MedAgent"
@@ -731,29 +818,6 @@ def main():
     data = load_json(args.data_path)
     print(f"Loaded {len(data)} samples from {args.data_path}")
 
-    # Configure doctor models and roles
-    # Allow variable number of doctors based on provided models
-    doctor_specialties = [
-        MedicalSpecialty.INTERNAL_MEDICINE,
-        MedicalSpecialty.SURGERY,
-        MedicalSpecialty.RADIOLOGY
-    ]
-
-    # Make sure we have enough specialties for all provided models
-    if len(args.doctor_models) > len(doctor_specialties):
-        print(f"Warning: More doctor models ({len(args.doctor_models)}) provided than specialties ({len(doctor_specialties)}). "
-              f"Extra models will not be used.")
-
-    # Create doctor configurations
-    doctor_configs = []
-    for i, model in enumerate(args.doctor_models[:len(doctor_specialties)]):
-        doctor_configs.append({
-            "specialty": doctor_specialties[i],
-            "model_key": model
-        })
-
-    print(f"Configuring {len(doctor_configs)} doctors with models: {args.doctor_models[:len(doctor_configs)]}")
-
     # Process each item
     for item in tqdm(data, desc=f"Running MDT consultation on {dataset_name}"):
         pid = item["qid"]
@@ -773,7 +837,7 @@ def main():
             # Process the item
             result = process_input(
                 item,
-                doctor_configs=doctor_configs,
+                model_key=args.model,
                 meta_model_key=args.meta_model,
                 decision_model_key=args.decision_model
             )
