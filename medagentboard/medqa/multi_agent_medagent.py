@@ -602,6 +602,8 @@ class MDTConsultation:
         Returns:
             Dictionary containing final consultation result
         """
+        start_time = time.time()
+
         print(f"Starting MDT consultation for case {qid}")
         print(f"Question: {question}")
         if options:
@@ -619,9 +621,6 @@ class MDTConsultation:
             "selected_specialties": [s.value for s in specialties],
             "rounds": []
         }
-
-        if image_path:
-            case_history["case"]["image_path"] = image_path
 
         current_round = 0
         final_decision = None
@@ -694,12 +693,16 @@ class MDTConsultation:
 
             print("No consensus reached, continuing to next round")
 
+        print(f"Final answer: {final_decision.get('answer', '')}")
+
+        # Calculate processing time
+        processing_time = time.time() - start_time
+
         # Add final decision to history
         case_history["final_decision"] = final_decision
         case_history["consensus_reached"] = consensus_reached
         case_history["total_rounds"] = current_round
-
-        print(f"Final answer: {final_decision.get('answer', '')}")
+        case_history["processing_time"] = processing_time
 
         return case_history
 
@@ -762,7 +765,6 @@ def process_input(item, model_key="qwen-vl-max", meta_model_key="qwen-max-latest
     # Optional fields
     options = item.get("options")
     image_path = item.get("image_path")
-    gt_answer = item.get("answer")
 
     # Initialize consultation
     mdt = MDTConsultation(

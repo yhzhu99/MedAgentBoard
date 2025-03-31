@@ -528,10 +528,10 @@ class SingleModelInference:
                 "reasoning": reasoning,
                 "prompt_type": prompt_type,
                 "model": self.model_key,
-                "processing_time": processing_time,
                 "raw_responses": responses,
                 "individual_responses": individual_responses,
-                "voting_details": voting_details
+                "voting_details": voting_details,
+                "processing_time": processing_time
             }
         }
 

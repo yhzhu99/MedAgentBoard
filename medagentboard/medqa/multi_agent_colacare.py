@@ -644,6 +644,7 @@ class MDTConsultation:
         Returns:
             Dictionary containing final consultation result
         """
+        start_time = time.time()
 
         print(f"Starting MDT consultation for case {qid}")
         print(f"Question: {question}")
@@ -733,10 +734,14 @@ class MDTConsultation:
 
         print(f"Final decision: {final_decision.get('answer', '')}")
 
+        # Calculate processing time
+        processing_time = time.time() - start_time
+
         # Add final decision to history
         case_history["final_decision"] = final_decision
         case_history["consensus_reached"] = consensus_reached
         case_history["total_rounds"] = current_round
+        case_history["processing_time"] = processing_time
 
         return case_history
 
