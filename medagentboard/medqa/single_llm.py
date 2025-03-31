@@ -33,14 +33,16 @@ class SingleModelInference:
     using various prompting techniques.
     """
 
-    def __init__(self, model_key: str = "qwen-max-latest"):
+    def __init__(self, model_key: str = "qwen-max-latest", sample_size: int = 5):
         """
         Initialize the inference handler.
 
         Args:
             model_key: Key identifying the model in LLM_MODELS_SETTINGS
+            sample_size: Number of samples for self-consistency methods
         """
         self.model_key = model_key
+        self.sample_size = sample_size
 
         if model_key not in LLM_MODELS_SETTINGS:
             raise ValueError(f"Model key '{model_key}' not found in LLM_MODELS_SETTINGS")
@@ -52,7 +54,7 @@ class SingleModelInference:
             base_url=model_settings["base_url"],
         )
         self.model_name = model_settings["model_name"]
-        print(f"Initialized SingleModelInference with model: {model_key}")
+        print(f"Initialized SingleModelInference with model: {model_key}, sample_size: {sample_size}")
 
     def _call_llm(self,
                  system_message: str,
@@ -74,30 +76,48 @@ class SingleModelInference:
             List of LLM response texts
         """
         retries = 0
-        while retries < max_retries:
+        all_responses = []
+
+        # For each sample we need
+        remaining_samples = n_samples
+
+        while remaining_samples > 0 and retries < max_retries:
             try:
                 messages = [
                     {"role": "system", "content": system_message},
                     {"role": "user", "content": user_message}
                 ]
 
+                # Some models might not properly support n > 1, so we make multiple calls if needed
+                current_n = min(remaining_samples, 1)  # Request just 1 at a time to be safe
+
                 completion = self.client.chat.completions.create(
                     model=self.model_name,
                     messages=messages,
                     response_format=response_format,
-                    n=n_samples,
+                    n=current_n,
                     stream=False
                 )
 
                 responses = [choice.message.content for choice in completion.choices]
-                return responses
+                all_responses.extend(responses)
+                remaining_samples -= len(responses)
+
+                # Reset retry counter on successful API call
+                retries = 0
 
             except Exception as e:
                 retries += 1
                 print(f"LLM API call error (attempt {retries}/{max_retries}): {e}")
                 if retries >= max_retries:
-                    raise Exception(f"LLM API call failed after {max_retries} attempts: {e}")
+                    if all_responses:  # If we have some responses, use those rather than failing
+                        print(f"Warning: Only obtained {len(all_responses)}/{n_samples} samples after max retries")
+                        break
+                    else:
+                        raise Exception(f"LLM API call failed after {max_retries} attempts: {e}")
                 time.sleep(1)  # Brief pause before retrying
+
+        return all_responses
 
     def _prepare_user_message(self,
                             prompt: str,
@@ -394,13 +414,13 @@ class SingleModelInference:
             # For self-consistency, use zero-shot but with multiple samples
             prompt = self.zero_shot_prompt(question, options)
             response_format = None
-            n_samples = 3
+            n_samples = self.sample_size  # Use the configured sample_size
 
         elif prompt_type == "cot_sc":
             # For CoT with self-consistency, use CoT with multiple samples
             prompt = self.cot_prompt(question, options)
             response_format = {"type": "json_object"}
-            n_samples = 3
+            n_samples = self.sample_size  # Use the configured sample_size
 
         else:
             raise ValueError(f"Unknown prompt type: {prompt_type}")
@@ -416,6 +436,7 @@ class SingleModelInference:
             n_samples=n_samples
         )
 
+        voting_details = None
         # Process responses based on prompt type
         if prompt_type in ["cot", "cot_sc"]:
             # Extract answers from JSON responses
@@ -426,7 +447,7 @@ class SingleModelInference:
                     parsed = json.loads(response)
                     thought = parsed.get("Thought", "") or parsed.get("thought", "")
                     answer = parsed.get("Answer", "") or parsed.get("answer", "")
-                    parsed_responses.append({"thought": thought, "answer": answer})
+                    parsed_responses.append({"thought": thought, "answer": answer, "full_response": response})
                 except json.JSONDecodeError:
                     # Fallback parsing for malformed JSON
                     lines = response.strip().split('\n')
@@ -439,31 +460,50 @@ class SingleModelInference:
                         elif "answer" in line.lower() and ":" in line:
                             answer = line.split(":", 1)[1].strip()
 
-                    parsed_responses.append({"thought": thought, "answer": answer})
+                    parsed_responses.append({"thought": thought, "answer": answer, "full_response": response})
 
             if prompt_type == "cot":
                 # For CoT, use the first response
                 predicted_answer = parsed_responses[0]["answer"]
                 reasoning = parsed_responses[0]["thought"]
+                individual_responses = [parsed_responses[0]]
             else:
                 # For CoT-SC, use majority voting on answers
                 answers = [r["answer"] for r in parsed_responses]
                 answer_counts = Counter(answers)
                 predicted_answer = answer_counts.most_common(1)[0][0]
 
+                # Detailed voting breakdown
+                voting_details = {
+                    "vote_counts": dict(answer_counts),
+                    "winning_answer": predicted_answer,
+                    "total_votes": sum(answer_counts.values())
+                }
+
                 # Collect all reasoning paths
-                reasoning = "\n\n".join([f"Path {i+1}: {r['thought']}" for i, r in enumerate(parsed_responses)])
+                reasoning = "\n\n".join([f"Path {i+1}: {r['thought']}\nAnswer: {r['answer']}" for i, r in enumerate(parsed_responses)])
+                individual_responses = parsed_responses
 
         elif prompt_type == "self_consistency":
             # For self-consistency, use majority voting
             answer_counts = Counter(responses)
             predicted_answer = answer_counts.most_common(1)[0][0]
-            reasoning = f"Majority vote from {n_samples} samples: {dict(answer_counts)}"
+
+            # Detailed voting breakdown
+            voting_details = {
+                "vote_counts": dict(answer_counts),
+                "winning_answer": predicted_answer,
+                "total_votes": sum(answer_counts.values())
+            }
+
+            reasoning = f"Majority vote from {len(responses)} samples: {dict(answer_counts)}"
+            individual_responses = [{"answer": r, "full_response": r} for r in responses]
 
         else:
             # For zero-shot and few-shot, use the first response
             predicted_answer = responses[0].strip()
             reasoning = "Direct answer, no explicit reasoning"
+            individual_responses = [{"answer": predicted_answer, "full_response": responses[0]}]
 
         # Clean up the predicted answer (extract just the option letter for MC)
         if is_mc and len(predicted_answer) > 1:
@@ -476,7 +516,7 @@ class SingleModelInference:
         # Calculate processing time
         processing_time = time.time() - start_time
 
-        # Prepare the result structure to match ColaCare's format
+        # Prepare the result structure with improved details
         result = {
             "qid": qid,
             "timestamp": int(time.time()),
@@ -489,7 +529,9 @@ class SingleModelInference:
                 "prompt_type": prompt_type,
                 "model": self.model_key,
                 "processing_time": processing_time,
-                "raw_responses": responses
+                "raw_responses": responses,
+                "individual_responses": individual_responses,
+                "voting_details": voting_details
             }
         }
 
@@ -509,6 +551,8 @@ def main():
                        help="Prompting technique to use")
     parser.add_argument("--model_key", type=str, default="qwen-max-latest",
                        help="Model key from LLM_MODELS_SETTINGS")
+    parser.add_argument("--sample_size", type=int, default=5,
+                        help="Number of samples for self-consistency methods")
     args = parser.parse_args()
 
     # Dataset and QA type
@@ -516,11 +560,13 @@ def main():
     qa_type = args.qa_type
     prompt_type = args.prompt_type
     model_key = args.model_key
+    sample_size = args.sample_size
 
     print(f"Dataset: {dataset_name}")
     print(f"QA Type: {qa_type}")
     print(f"Prompt Type: {prompt_type}")
     print(f"Model: {model_key}")
+    print(f"Sample Size: {sample_size}")
 
     # Method name for logging
     method = f"SingleLLM_{prompt_type}"
@@ -537,7 +583,7 @@ def main():
     print(f"Logs directory: {logs_dir}")
 
     # Initialize the model
-    model = SingleModelInference(model_key=model_key)
+    model = SingleModelInference(model_key=model_key, sample_size=sample_size)
 
     # Load the data
     data = load_json(data_path)
