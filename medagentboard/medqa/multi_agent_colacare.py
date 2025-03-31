@@ -818,10 +818,6 @@ def process_input(item, doctor_configs=None, meta_model_key="qwen-max-latest"):
 def main():
     parser = argparse.ArgumentParser(description="Run MDT consultation on medical datasets")
     parser.add_argument("--dataset", type=str, required=True, help="Specify dataset name")
-    parser.add_argument("--data_path", type=str, required=True,
-                       help="Path to the medqa json file (e.g., my_datasets/processed/MedQA/medqa_mc.json)")
-    parser.add_argument("--has_images", action="store_true",
-                       help="Specify if the dataset contains images (like PathVQA or VQA-RAD)")
     parser.add_argument("--qa_type", type=str, choices=["mc", "ff"], required=True,
                        help="QA type: multiple-choice (mc) or free-form (ff)")
     parser.add_argument("--meta_model", type=str, default="qwen-max-latest",
@@ -832,21 +828,26 @@ def main():
 
     method = "ColaCare"
 
+
+
     # Extract dataset name from path
     dataset_name = args.dataset
     print(f"Dataset: {dataset_name}")
 
     # Determine format (multiple choice or free-form)
-    qa_format = args.qa_type
-    print(f"QA Format: {qa_format}")
+    qa_type = args.qa_type
+    print(f"QA Format: {qa_type}")
 
     # Create logs directory structure
-    logs_dir = os.path.join("logs", dataset_name, "multiple_choice" if qa_format == "mc" else "free-form", method)
+    logs_dir = os.path.join("logs", dataset_name, "multiple_choice" if qa_type == "mc" else "free-form", method)
     os.makedirs(logs_dir, exist_ok=True)
 
+    # Set up data path
+    data_path = f"./my_datasets/processed/{dataset_name}/medqa_{qa_type}.json"
+
     # Load the data
-    data = load_json(args.data_path)
-    print(f"Loaded {len(data)} samples from {args.data_path}")
+    data = load_json(data_path)
+    print(f"Loaded {len(data)} samples from {data_path}")
 
     # Configure doctor models and roles
     # Allow variable number of doctors based on provided models
@@ -879,12 +880,6 @@ def main():
         if os.path.exists(os.path.join(logs_dir, f"{pid}-result.json")):
             print(f"Skipping {pid} - already processed")
             continue
-
-        # Check for images if required
-        if args.has_images:
-            if "image_path" not in item or not item["image_path"]:
-                print(f"Warning: Item {pid} does not have an image path but dataset requires images")
-                continue
 
         try:
             # Process the item
