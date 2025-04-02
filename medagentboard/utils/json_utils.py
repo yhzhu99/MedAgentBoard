@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from typing import Any, List, Dict, Union, Optional, Iterator
 
 def save_json(data: Any, filepath: str, indent: int = 2) -> None:
@@ -165,34 +166,7 @@ def preprocess_response_string(response_text: str) -> str:
     elif response_text.startswith('```') and response_text.endswith('```'):
         response_text = response_text[3:-3].strip()
     response_text = response_text.replace("```", "").replace("json", "").strip()
+    # Remove trailing commas
+    response_text = re.sub(r',\s*}', '}', response_text)
+    response_text = re.sub(r',\s*]', ']', response_text)
     return response_text
-
-# Example usage
-if __name__ == "__main__":
-    # Example data
-    example_data = [
-        {
-            "qid": "medqa_mc_001",
-            "question": "A junior orthopaedic surgery resident is completing a carpal tunnel repair...",
-            "options": {
-                "A": "Disclose the error to the patient but leave it out of the operative report",
-                "B": "Disclose the error to the patient and put it in the operative report",
-                "C": "Tell the attending that he cannot fail to disclose this mistake",
-                "D": "Report the physician to the ethics committee",
-                "E": "Refuse to dictate the operative report"
-            },
-            "answer": "C",
-        }
-    ]
-
-    # Save example
-    save_json(example_data, "data/example.json")
-
-    # Load example
-    loaded_data = load_json("data/example.json")
-    print(f"Loaded data contains {len(loaded_data)} questions")
-
-    # JSONL example
-    save_jsonl(example_data, "data/example.jsonl")
-    loaded_jsonl = load_jsonl("data/example.jsonl")
-    print(f"Loaded JSONL contains {len(loaded_jsonl)} questions")
