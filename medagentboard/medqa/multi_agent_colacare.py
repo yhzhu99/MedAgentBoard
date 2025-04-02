@@ -14,7 +14,7 @@ from tqdm import tqdm
 
 from medagentboard.utils.llm_configs import LLM_MODELS_SETTINGS
 from medagentboard.utils.encode_image import encode_image
-from medagentboard.utils.json_utils import load_json, save_json
+from medagentboard.utils.json_utils import load_json, save_json, preprocess_response_string
 
 
 class MedicalSpecialty(Enum):
@@ -181,7 +181,7 @@ class DoctorAgent(BaseAgent):
 
         # Parse response
         try:
-            result = json.loads(response_text)
+            result = json.loads(preprocess_response_string(response_text))
             print(f"Doctor {self.agent_id} response successfully parsed")
             # Add to memory
             self.memory.append({
@@ -288,7 +288,7 @@ class DoctorAgent(BaseAgent):
 
         # Parse response
         try:
-            result = json.loads(response_text)
+            result = json.loads(preprocess_response_string(response_text))
             print(f"Doctor {self.agent_id} review successfully parsed")
 
             # Normalize agree field
@@ -420,7 +420,7 @@ class MetaAgent(BaseAgent):
 
         # Parse response
         try:
-            result = json.loads(response_text)
+            result = json.loads(preprocess_response_string(response_text))
             print("Meta agent synthesis successfully parsed")
 
             # Add to memory
@@ -555,7 +555,7 @@ class MetaAgent(BaseAgent):
 
         # Parse response
         try:
-            result = json.loads(response_text)
+            result = json.loads(preprocess_response_string(response_text))
             print("Meta agent final decision successfully parsed")
 
             # Add to memory
@@ -745,7 +745,6 @@ class MDTConsultation:
 
         return case_history
 
-
 def parse_structured_output(response_text: str) -> Dict[str, str]:
     """
     Parse LLM response to extract structured output.
@@ -758,7 +757,7 @@ def parse_structured_output(response_text: str) -> Dict[str, str]:
     """
     try:
         # Try parsing as JSON
-        parsed = json.loads(response_text)
+        parsed = json.loads(preprocess_response_string(response_text))
         return parsed
     except json.JSONDecodeError:
         # If not valid JSON, extract from text
@@ -825,7 +824,7 @@ def main():
     parser.add_argument("--dataset", type=str, required=True, help="Specify dataset name")
     parser.add_argument("--qa_type", type=str, choices=["mc", "ff"], required=True,
                        help="QA type: multiple-choice (mc) or free-form (ff)")
-    parser.add_argument("--meta_model", type=str, default="qwen-max-latest",
+    parser.add_argument("--meta_model", type=str, default="deepseek-v3-ark",
                        help="Model used for meta agent")
     parser.add_argument("--doctor_models", nargs='+', default=["qwen-vl-max", "qwen-vl-max", "qwen-vl-max"],
                        help="Models used for doctor agents. Provide one model name per doctor.")
@@ -879,11 +878,11 @@ def main():
 
     # Process each item
     for item in tqdm(data, desc=f"Running MDT consultation on {dataset_name}"):
-        pid = item["qid"]
+        qid = item["qid"]
 
         # Skip if already processed
-        if os.path.exists(os.path.join(logs_dir, f"{pid}-result.json")):
-            print(f"Skipping {pid} - already processed")
+        if os.path.exists(os.path.join(logs_dir, f"{qid}-result.json")):
+            print(f"Skipping {qid} - already processed")
             continue
 
         try:
@@ -896,20 +895,21 @@ def main():
 
             # Add output to the original item and save
             item_result = {
-                "qid": pid,
+                "qid": qid,
                 "timestamp": int(time.time()),
                 "question": item["question"],
                 "options": item.get("options"),
+                "image_path": item.get("image_path"),
                 "ground_truth": item.get("answer"),
                 "predicted_answer": result["final_decision"]["answer"],
                 "case_history": result
             }
 
             # Save individual result
-            save_json(item_result, os.path.join(logs_dir, f"{pid}-result.json"))
+            save_json(item_result, os.path.join(logs_dir, f"{qid}-result.json"))
 
         except Exception as e:
-            print(f"Error processing item {pid}: {e}")
+            print(f"Error processing item {qid}: {e}")
 
 
 if __name__ == "__main__":

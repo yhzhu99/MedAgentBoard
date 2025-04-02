@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 from medagentboard.utils.llm_configs import LLM_MODELS_SETTINGS
 from medagentboard.utils.encode_image import encode_image
-from medagentboard.utils.json_utils import load_json, save_json
+from medagentboard.utils.json_utils import load_json, save_json, preprocess_response_string
 
 
 class MedicalSpecialty(Enum):
@@ -145,7 +145,7 @@ class ExpertGathererAgent(BaseAgent):
 
         # Parse response
         try:
-            result = json.loads(response_text)
+            result = json.loads(preprocess_response_string(response_text))
             specialties = result.get("fields", [])
 
             # Convert string specialties to MedicalSpecialty enum
@@ -276,7 +276,7 @@ class DoctorAgent(BaseAgent):
 
         # Parse response
         try:
-            result = json.loads(response_text)
+            result = json.loads(preprocess_response_string(response_text))
             print(f"Doctor {self.agent_id} response successfully parsed")
             return result
         except json.JSONDecodeError:
@@ -321,7 +321,7 @@ class DoctorAgent(BaseAgent):
 
         # Parse response
         try:
-            result = json.loads(response_text)
+            result = json.loads(preprocess_response_string(response_text))
             print(f"Doctor {self.agent_id} review successfully parsed")
 
             # Normalize agree field
@@ -415,7 +415,7 @@ class MetaAgent(BaseAgent):
 
         # Parse response
         try:
-            result = json.loads(response_text)
+            result = json.loads(preprocess_response_string(response_text))
             print("Meta agent synthesis successfully parsed")
 
             # Ensure there's no answer in the result
@@ -529,7 +529,7 @@ class DecisionMakingAgent(BaseAgent):
 
         # Parse response
         try:
-            result = json.loads(response_text)
+            result = json.loads(preprocess_response_string(response_text))
             print("Decision making agent response successfully parsed")
             return result
         except json.JSONDecodeError:
@@ -719,7 +719,7 @@ def parse_structured_output(response_text: str) -> Dict[str, str]:
     """
     try:
         # Try parsing as JSON
-        parsed = json.loads(response_text)
+        parsed = json.loads(preprocess_response_string(response_text))
         return parsed
     except json.JSONDecodeError:
         # If not valid JSON, extract from text
@@ -821,11 +821,11 @@ def main():
 
     # Process each item
     for item in tqdm(data, desc=f"Running MDT consultation on {dataset_name}"):
-        pid = item["qid"]
+        qid = item["qid"]
 
         # Skip if already processed
-        if os.path.exists(os.path.join(logs_dir, f"{pid}-result.json")):
-            print(f"Skipping {pid} - already processed")
+        if os.path.exists(os.path.join(logs_dir, f"{qid}-result.json")):
+            print(f"Skipping {qid} - already processed")
             continue
 
         try:
@@ -839,20 +839,21 @@ def main():
 
             # Add output to the original item and save
             item_result = {
-                "qid": pid,
+                "qid": qid,
                 "timestamp": int(time.time()),
                 "question": item["question"],
                 "options": item.get("options"),
+                "image_path": item.get("image_path"),
                 "ground_truth": item.get("answer"),
                 "predicted_answer": result["final_decision"]["answer"],
                 "case_history": result
             }
 
             # Save individual result
-            save_json(item_result, os.path.join(logs_dir, f"{pid}-result.json"))
+            save_json(item_result, os.path.join(logs_dir, f"{qid}-result.json"))
 
         except Exception as e:
-            print(f"Error processing item {pid}: {e}")
+            print(f"Error processing item {qid}: {e}")
 
 
 if __name__ == "__main__":

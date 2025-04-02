@@ -24,7 +24,7 @@ from typing import Dict, Any, Optional, List, Union
 
 from medagentboard.utils.llm_configs import LLM_MODELS_SETTINGS
 from medagentboard.utils.encode_image import encode_image
-from medagentboard.utils.json_utils import load_json, save_json
+from medagentboard.utils.json_utils import load_json, save_json, preprocess_response_string
 
 
 class SingleModelInference:
@@ -444,7 +444,7 @@ class SingleModelInference:
 
             for response in responses:
                 try:
-                    parsed = json.loads(response)
+                    parsed = json.loads(preprocess_response_string(response))
                     thought = parsed.get("Thought", "") or parsed.get("thought", "")
                     answer = parsed.get("Answer", "") or parsed.get("answer", "")
                     parsed_responses.append({"thought": thought, "answer": answer, "full_response": response})
@@ -522,6 +522,7 @@ class SingleModelInference:
             "timestamp": int(time.time()),
             "question": question,
             "options": options,
+            "image_path": image_path,
             "ground_truth": ground_truth,
             "predicted_answer": predicted_answer,
             "case_history": {
@@ -597,12 +598,12 @@ def main():
 
     # Process each item
     for item in tqdm(data, desc=f"Processing {dataset_name} with {prompt_type}"):
-        pid = item["qid"]
+        qid = item["qid"]
 
         # Skip if already processed
-        result_path = os.path.join(logs_dir, f"{pid}-result.json")
+        result_path = os.path.join(logs_dir, f"{qid}-result.json")
         if os.path.exists(result_path):
-            print(f"Skipping {pid} - already processed")
+            print(f"Skipping {qid} - already processed")
             skipped_count += 1
             continue
 
@@ -623,7 +624,7 @@ def main():
                 correct_count += 1
 
         except Exception as e:
-            print(f"Error processing item {pid}: {e}")
+            print(f"Error processing item {qid}: {e}")
             error_count += 1
 
     # Print summary
