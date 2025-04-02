@@ -792,9 +792,9 @@ def main():
                        help="QA type: multiple-choice (mc) or free-form (ff)")
     parser.add_argument("--model", type=str, default="qwen-vl-max",
                        help="Model used for doctor agents")
-    parser.add_argument("--meta_model", type=str, default="qwen-max-latest",
+    parser.add_argument("--meta_model", type=str, default="deepseek-v3-ark",
                        help="Model used for meta agent")
-    parser.add_argument("--decision_model", type=str, default="qwen-max-latest",
+    parser.add_argument("--decision_model", type=str, default="qwen-vl-max",
                        help="Model used for decision making agent")
     args = parser.parse_args()
 

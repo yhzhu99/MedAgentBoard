@@ -60,11 +60,25 @@ LLM_MODELS_SETTINGS = {
         "comment": "qwen-vl-max",
         "reasoning": False,
     },
-        "qwen2.5-vl-72b-instruct": {
+    "qwen2.5-vl-72b-instruct": {
         "api_key": os.getenv("DASHSCOPE_API_KEY"),
         "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
         "model_name": "qwen2.5-vl-72b-instruct",
         "comment": "qwen2.5-vl-72b-instruct",
+        "reasoning": False,
+    },
+    "qwen2.5-vl-32b-instruct": {
+        "api_key": os.getenv("DASHSCOPE_API_KEY"),
+        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "model_name": "qwen2.5-vl-32b-instruct",
+        "comment": "qwen2.5-vl-32b-instruct",
+        "reasoning": False,
+    },
+    "qwen2.5-72b-instruct": {
+        "api_key": os.getenv("DASHSCOPE_API_KEY"),
+        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "model_name": "qwen2.5-72b-instruct",
+        "comment": "qwen2.5-72b-instruct",
         "reasoning": False,
     },
 }
