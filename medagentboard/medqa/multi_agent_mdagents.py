@@ -762,7 +762,6 @@ class MDAgentsFramework:
         return {
             "predicted_answer": predicted_answer,
             "explanation": explanation,
-            "agent_log": agent.memory,
             "complexity": ComplexityLevel.BASIC.value
         }
 
@@ -920,15 +919,10 @@ class MDAgentsFramework:
 
         print(f"Intermediate Query Final Result: Answer='{final_answer}', Explanation='{final_explanation[:100]}...'")
 
-        # Collect agent logs for full transparency
-        all_agent_logs = {agent.agent_id: agent.memory for agent in agents}
-        all_agent_logs[self.decision_maker_agent.agent_id] = self.decision_maker_agent.memory
-
         return {
             "predicted_answer": final_answer,
             "explanation": final_explanation,
             "interaction_log": interaction_log,  # Contains initial opinions
-            "agent_logs": all_agent_logs,  # Memory of each agent involved
             "complexity": ComplexityLevel.INTERMEDIATE.value,
             "expert_configs": expert_configs  # Store the configurations for reference
         }
@@ -1146,15 +1140,10 @@ class MDAgentsFramework:
 
         print(f"Advanced Query Final Result: Answer='{final_answer}', Explanation='{final_explanation[:100]}...'")
 
-        # Collect agent logs
-        all_agent_logs = {agent.agent_id: agent.memory for agent in all_agents_in_groups}
-        all_agent_logs[self.decision_maker_agent.agent_id] = self.decision_maker_agent.memory
-
         return {
             "predicted_answer": final_answer,
             "explanation": final_explanation,
             "team_reports": team_reports,  # Reports from each team
-            "agent_logs": all_agent_logs,  # Memory of all agents involved in teams
             "complexity": ComplexityLevel.ADVANCED.value,
             "team_configs": team_configs  # Store the configurations for reference
         }
