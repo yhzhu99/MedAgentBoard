@@ -5,6 +5,7 @@ from openai import OpenAI
 from enum import Enum
 from typing import Dict, Any, Optional, List, Union
 from tqdm import tqdm
+import json
 
 # Utilities from the ColaCare framework
 from medagentboard.utils.llm_configs import LLM_MODELS_SETTINGS
@@ -73,9 +74,8 @@ class BaseAgent:
             base_url=model_settings["base_url"],
         )
         self.model_name = model_settings["model_name"]
-        self.is_multimodal = model_settings.get("multimodal", False) # Check if model supports images
 
-        print(f"Initialized Agent: ID={self.agent_id}, Role={self.role}, Model={self.model_key} ({self.model_name}), Multimodal={self.is_multimodal}")
+        print(f"Initialized Agent: ID={self.agent_id}, Role={self.role}, Model={self.model_key} ({self.model_name})")
 
     def call_llm(self,
                  messages: List[Dict[str, Any]],
@@ -96,17 +96,7 @@ class BaseAgent:
 
         Raises:
             Exception: If LLM call fails after all retries.
-            ValueError: If a non-multimodal model receives image content.
         """
-        # Check for image content if the model is not multimodal
-        has_image_content = any(
-            isinstance(msg.get("content"), list) and
-            any(item.get("type") == "image_url" for item in msg["content"])
-            for msg in messages
-        )
-
-        if has_image_content and not self.is_multimodal:
-            raise ValueError(f"Agent {self.agent_id} (Model: {self.model_key}) is not multimodal but received image content.")
 
         retries = 0
         while retries < max_retries:
@@ -168,8 +158,6 @@ class BaseAgent:
         # Prepare user message content (text + optional image)
         user_content: Union[str, List[Dict[str, Any]]]
         if image_path:
-            if not self.is_multimodal:
-                 raise ValueError(f"Agent {self.agent_id} (Model: {self.model_key}) received an image path but is not multimodal.")
             if not os.path.exists(image_path):
                 raise FileNotFoundError(f"Image path does not exist: {image_path}")
 
@@ -348,7 +336,9 @@ class Group:
         if self.question_context.get('options'):
             options_str = "\n".join([f"{k}: {v}" for k, v in self.question_context['options'].items()])
             synthesis_prompt += f"Options:\n{options_str}\n"
-            synthesis_prompt += "If this is a multiple-choice question, clearly state the chosen option (e.g., 'Answer: B').\n"
+            synthesis_prompt += "Respond in JSON format with 'answer' (letter for multiple choice) and 'explanation' fields.\n"
+        else:
+            synthesis_prompt += "Respond in JSON format with 'answer' and 'explanation' fields.\n"
 
         if self.question_context.get('image_path'):
             synthesis_prompt += f"(Image provided)\n"
@@ -359,6 +349,7 @@ class Group:
         final_report = self.lead_agent.chat(
             prompt=synthesis_prompt,
             image_path=self.question_context.get('image_path'),
+            response_format={"type": "json_object"},
             temperature=0.2  # Lower temperature for more definitive answer
         )
 
@@ -412,21 +403,21 @@ class MDAgentsFramework:
             agent_id="moderator",
             role=AgentRole.MODERATOR,
             model_key=model_config.get('moderator', DEFAULT_MODERATOR_MODEL),
-            instruction="You are a medical expert who conducts initial assessment. Your job is to decide the difficulty/complexity of the medical query based on the provided definitions."
+            instruction="You are a medical expert who conducts initial assessment. Your job is to decide the difficulty/complexity of the medical query based on the provided definitions. Respond in JSON format."
         )
 
         self.recruiter_agent = BaseAgent(
             agent_id="recruiter",
             role=AgentRole.RECRUITER,
             model_key=model_config.get('recruiter', DEFAULT_RECRUITER_MODEL),
-            instruction="You are an experienced medical expert who recruits appropriate specialists based on the medical query and its complexity level."
+            instruction="You are an experienced medical expert who recruits appropriate specialists based on the medical query and its complexity level. Respond in JSON format."
         )
 
         self.decision_maker_agent = BaseAgent(
             agent_id="final_decision_maker",
             role=AgentRole.DECISION_MAKER,
             model_key=model_config.get('moderator', DEFAULT_MODERATOR_MODEL), # Reuse moderator model for final synthesis
-            instruction="You are a final medical decision maker. Review all provided information (opinions, reports, discussions) and make the final, consolidated answer to the original medical query."
+            instruction="You are a final medical decision maker. Review all provided information (opinions, reports, discussions) and make the final, consolidated answer to the original medical query. Respond in JSON format."
         )
 
         print("MDAgentsFramework Initialized.")
@@ -461,35 +452,44 @@ class MDAgentsFramework:
 
         # Prompt based on paper Appendix Figure: Complexity check prompt
         prompt = (
-            f"Given the medical query below, decide its difficulty/complexity. Respond with only one word: 'basic', 'intermediate', or 'advanced'.\n\n"
+            f"Given the medical query below, decide its difficulty/complexity.\n\n"
             f"{query_context}\n"
             f"Complexity Guidelines:\n"
             f"1) basic: A single medical agent (like a PCP or general physician) can likely answer this knowledge question or simple case directly.\n"
             f"2) intermediate: Requires discussion among a team of medical experts with different specialties to reach a consensus.\n"
             f"3) advanced: A complex case requiring multiple teams (e.g., initial assessment, diagnostics, final review) collaborating across departments.\n\n"
-            f"Your decision (basic/intermediate/advanced):"
+            f"Respond with a JSON object containing a 'complexity' field with one of these values: 'basic', 'intermediate', or 'advanced'."
         )
 
         # For image-based queries, we can optionally include the image in the complexity check
         response = self.moderator_agent.chat(
             prompt=prompt,
             image_path=None,  # Don't use image for complexity check (relying on text description)
+            response_format={"type": "json_object"},
             temperature=0.1   # Low temp for more consistent classification
         )
 
-        response_clean = response.strip().lower().replace('.', '').replace(')', '')
+        try:
+            # Clean and parse the JSON response
+            response_clean = preprocess_response_string(response)
+            response_json = json.loads(response_clean)
+            complexity_str = response_json.get("complexity", "").lower()
 
-        if "basic" in response_clean or '1' in response_clean:
-            print("Complexity: BASIC")
-            return ComplexityLevel.BASIC
-        elif "intermediate" in response_clean or '2' in response_clean:
-            print("Complexity: INTERMEDIATE")
-            return ComplexityLevel.INTERMEDIATE
-        elif "advanced" in response_clean or '3' in response_clean:
-            print("Complexity: ADVANCED")
-            return ComplexityLevel.ADVANCED
-        else:
-            print(f"Warning: Could not determine complexity from response '{response}'. Defaulting to INTERMEDIATE.")
+            if complexity_str == "basic":
+                print("Complexity: BASIC")
+                return ComplexityLevel.BASIC
+            elif complexity_str == "intermediate":
+                print("Complexity: INTERMEDIATE")
+                return ComplexityLevel.INTERMEDIATE
+            elif complexity_str == "advanced":
+                print("Complexity: ADVANCED")
+                return ComplexityLevel.ADVANCED
+            else:
+                print(f"Warning: Invalid complexity value '{complexity_str}'. Defaulting to INTERMEDIATE.")
+                return ComplexityLevel.INTERMEDIATE
+
+        except Exception as e:
+            print(f"Error parsing complexity response: {e}. Raw response: {response}. Defaulting to INTERMEDIATE.")
             return ComplexityLevel.INTERMEDIATE
 
     def _recruit_experts(self,
@@ -533,7 +533,8 @@ class MDAgentsFramework:
             recruitment_instruction = (
                 f"You are an experienced medical expert. Your task is to recruit a team of {self.num_experts_intermediate} experts "
                 f"with diverse specialties and expertise to discuss and solve the given medical query. "
-                f"Specify their role, a brief expertise description, and optionally a communication hierarchy (e.g., 'Cardiologist > Nurse', 'Independent')."
+                f"Specify their role, a brief expertise description, and optionally a communication hierarchy (e.g., 'Cardiologist > Nurse', 'Independent'). "
+                f"Respond in JSON format."
             )
 
             self.recruiter_agent.instruction = recruitment_instruction
@@ -541,54 +542,49 @@ class MDAgentsFramework:
             prompt = (
                 f"{query_context}\n"
                 f"Recruit {self.num_experts_intermediate} experts for this moderately complex query.\n"
-                f"Format your response as a numbered list, like this example:\n"
-                f"1. Pediatrician - Specializes in child healthcare. - Hierarchy: Independent\n"
-                f"2. Cardiologist - Focuses on heart conditions. - Hierarchy: Pediatrician > Cardiologist\n"
-                f"3. Pulmonologist - Specializes in respiratory disorders. - Hierarchy: Independent\n"
-                f"\nPlease provide only the list of experts in the specified format."
+                f"Respond with a JSON array 'experts' where each expert object has fields: 'role', 'expertise', and 'hierarchy'.\n"
+                f"Example response structure:\n"
+                f"{{\"experts\": [\n"
+                f"  {{\"role\": \"Pediatrician\", \"expertise\": \"Specializes in child healthcare\", \"hierarchy\": \"Independent\"}},\n"
+                f"  {{\"role\": \"Cardiologist\", \"expertise\": \"Focuses on heart conditions\", \"hierarchy\": \"Pediatrician > Cardiologist\"}},\n"
+                f"  {{\"role\": \"Pulmonologist\", \"expertise\": \"Specializes in respiratory disorders\", \"hierarchy\": \"Independent\"}}\n"
+                f"]}}"
             )
 
             # Get the recruiter's response
             recruitment_response = self.recruiter_agent.chat(
                 prompt=prompt,
                 image_path=None,  # No need for image in recruitment
+                response_format={"type": "json_object"},
                 temperature=0.5   # Medium temperature for creativity in team composition
             )
 
             print(f"Recruiter Response (Intermediate):\n{recruitment_response}")
 
             # Parse the response to extract expert configurations
-            experts = []
-            lines = [line.strip() for line in recruitment_response.split('\n') if line.strip()]
+            try:
+                # Clean and parse the JSON response
+                response_clean = preprocess_response_string(recruitment_response)
+                response_json = json.loads(response_clean)
+                experts = response_json.get("experts", [])
 
-            for line in lines:
-                # Check if the line follows the expected format
-                if '-' not in line:
-                    continue
+                # Validate the structure
+                validated_experts = []
+                for expert in experts:
+                    if isinstance(expert, dict) and 'role' in expert:
+                        validated_expert = {
+                            "role": expert.get("role", "Unknown Role"),
+                            "expertise": expert.get("expertise", "General expertise related to the role."),
+                            "hierarchy": expert.get("hierarchy", "Independent")
+                        }
+                        validated_experts.append(validated_expert)
 
-                # Try to extract hierarchy information
-                parts = line.split(" - Hierarchy: ")
-                hierarchy = parts[1].strip() if len(parts) > 1 else "Independent"
+                experts = validated_experts
 
-                # Extract role and expertise
-                main_part = parts[0]
-                sub_parts = main_part.split(" - ", 1)
-
-                # Clean up role (remove numbering like "1. ")
-                role_part = sub_parts[0]
-                role = role_part.split('.', 1)[-1].strip() if '.' in role_part else role_part.strip()
-
-                # Extract expertise description if available
-                expertise = sub_parts[1].strip() if len(sub_parts) > 1 else "General expertise related to the role."
-
-                if role:  # Ensure we have a role
-                    experts.append({"role": role, "expertise": expertise, "hierarchy": hierarchy})
-                else:
-                    print(f"Warning: Could not parse role from line: '{line}'")
-
-            # Fallback if no experts were successfully parsed
-            if not experts:
-                print("Warning: Failed to parse any experts. Using default roles.")
+            except Exception as e:
+                print(f"Error parsing expert recruitment response: {e}. Raw response: {recruitment_response}")
+                # Fallback to default roles
+                print("Warning: Failed to parse experts. Using default roles.")
                 default_roles = ["Internal Medicine Specialist", "Radiologist", "Surgeon", "Pathologist", "Pharmacist"]
                 experts = [{"role": r, "expertise": f"Expertise in {r}", "hierarchy": "Independent"} for r in default_roles[:self.num_experts_intermediate]]
 
@@ -601,7 +597,8 @@ class MDAgentsFramework:
             recruitment_instruction = (
                 f"You are an experienced medical director. Your task is to organize {self.num_teams_advanced} Multidisciplinary Teams (MDTs) "
                 f"for a complex medical query. Each MDT should have around {self.num_agents_per_team_advanced} clinicians. Define the purpose (goal) of each team "
-                f"and list its members with their roles and expertise. Ensure you include an 'Initial Assessment Team (IAT)' and a 'Final Review and Decision Team (FRDT)'."
+                f"and list its members with their roles and expertise. Ensure you include an 'Initial Assessment Team (IAT)' and a 'Final Review and Decision Team (FRDT)'. "
+                f"Respond in JSON format."
             )
 
             self.recruiter_agent.instruction = recruitment_instruction
@@ -610,75 +607,66 @@ class MDAgentsFramework:
                 f"{query_context}\n"
                 f"Organize {self.num_teams_advanced} MDTs, each with ~{self.num_agents_per_team_advanced} members, for this complex query.\n"
                 f"Include an IAT and an FRDT.\n"
-                f"Format your response clearly, grouping members under each team's goal, like this example:\n\n"
-                f"Group 1 - Initial Assessment Team (IAT)\n"
-                f"Member 1: Emergency Physician (Lead) - Handles acute assessment.\n"
-                f"Member 2: Triage Nurse - Gathers initial patient data.\n"
-                f"Member 3: Radiologist - Provides initial imaging interpretation.\n\n"
-                f"Group 2 - Diagnostic Evidence Team (DET)\n"
-                f"Member 1: Cardiologist (Lead) - Focuses on cardiac diagnostics.\n"
-                f"Member 2: Pulmonologist - Focuses on respiratory diagnostics.\n"
-                f"Member 3: Pathologist - Analyzes tissue samples.\n\n"
-                f"Group 3 - Final Review and Decision Team (FRDT)\n"
-                f"Member 1: Senior Consultant (Lead) - Oversees final decision.\n"
-                f"Member 2: Clinical Pharmacist - Reviews medication interactions.\n"
-                f"Member 3: Ethicist - Considers ethical implications.\n\n"
-                f"Please provide the team structure in the specified format."
+                f"Respond with a JSON object containing a 'teams' array where each team has: 'group_id', 'goal', and 'members' array.\n"
+                f"Each member should have 'role', 'expertise', and optionally 'is_lead' (boolean) fields.\n"
+                f"Example structure:\n"
+                f"{{\"teams\": [\n"
+                f"  {{\"group_id\": \"Group 1\", \"goal\": \"Initial Assessment Team (IAT)\", \"members\": [\n"
+                f"    {{\"role\": \"Emergency Physician\", \"expertise\": \"Handles acute assessment\", \"is_lead\": true}},\n"
+                f"    {{\"role\": \"Triage Nurse\", \"expertise\": \"Gathers initial patient data\"}}\n"
+                f"  ]}},\n"
+                f"  {{\"group_id\": \"Group 2\", \"goal\": \"Final Review and Decision Team (FRDT)\", \"members\": [\n"
+                f"    {{\"role\": \"Senior Consultant\", \"expertise\": \"Oversees final decision\", \"is_lead\": true}},\n"
+                f"    {{\"role\": \"Clinical Pharmacist\", \"expertise\": \"Medication review\"}}\n"
+                f"  ]}}\n"
+                f"]}}"
             )
 
             # Get the recruiter's response
             recruitment_response = self.recruiter_agent.chat(
                 prompt=prompt,
                 image_path=None,  # No need for image in recruitment
+                response_format={"type": "json_object"},
                 temperature=0.5   # Medium temperature for creativity in team composition
             )
 
             print(f"Recruiter Response (Advanced):\n{recruitment_response}")
 
             # Parse the response into groups and members
-            teams = []
-            current_team = None
-            lines = [line.strip() for line in recruitment_response.split('\n') if line.strip()]
+            try:
+                # Clean and parse the JSON response
+                response_clean = preprocess_response_string(recruitment_response)
+                response_json = json.loads(response_clean)
+                teams = response_json.get("teams", [])
 
-            for line in lines:
-                if line.lower().startswith("group"):
-                    # Start a new group
-                    if current_team:
-                        teams.append(current_team)
+                # Validate the structure
+                validated_teams = []
+                for team in teams:
+                    if isinstance(team, dict) and 'group_id' in team and 'members' in team:
+                        validated_members = []
+                        for member in team.get('members', []):
+                            if isinstance(member, dict) and 'role' in member:
+                                validated_member = {
+                                    "role": member.get("role", "Unknown Role"),
+                                    "expertise": member.get("expertise", "General expertise for the role.")
+                                }
+                                # Only include is_lead if it's true
+                                if member.get("is_lead") is True:
+                                    validated_member["is_lead"] = True
+                                validated_members.append(validated_member)
 
-                    parts = line.split('-', 1)
-                    group_id = parts[0].strip()
-                    goal = parts[1].strip() if len(parts) > 1 else f"Goal for {group_id}"
-                    current_team = {"group_id": group_id, "goal": goal, "members": []}
+                        validated_team = {
+                            "group_id": team.get("group_id", f"Group {len(validated_teams)+1}"),
+                            "goal": team.get("goal", f"Goal for Group {len(validated_teams)+1}"),
+                            "members": validated_members
+                        }
+                        validated_teams.append(validated_team)
 
-                elif line.lower().startswith("member") and current_team:
-                    # Add member to current group
-                    parts = line.split(':', 1)
-                    member_info = parts[1].strip() if len(parts) > 1 else ""
+                teams = validated_teams
 
-                    # Try to split role and expertise
-                    sub_parts = member_info.split('-', 1)
-                    role_part = sub_parts[0].strip()
-                    expertise = sub_parts[1].strip() if len(sub_parts) > 1 else "General expertise for the role."
-
-                    # Check for lead indication
-                    is_lead = '(Lead)' in role_part
-                    role = role_part.replace('(Lead)', '').strip()
-
-                    if role:
-                        member_data = {"role": role, "expertise": expertise}
-                        if is_lead:
-                            member_data["is_lead"] = True  # Mark lead if found
-                        current_team["members"].append(member_data)
-                    else:
-                        print(f"Warning: Could not parse member role from line: '{line}'")
-
-            # Add the last parsed team
-            if current_team:
-                teams.append(current_team)
-
-            # Fallback if no teams were successfully parsed
-            if not teams:
+            except Exception as e:
+                print(f"Error parsing team recruitment response: {e}. Raw response: {recruitment_response}")
+                # Fallback if no teams were successfully parsed
                 print("Warning: Failed to parse any teams. Using default structure.")
                 # Create default teams with standard structure
                 teams = [
@@ -721,7 +709,7 @@ class MDAgentsFramework:
             agent_id="basic_solver",
             role=AgentRole.GENERAL_DOCTOR,
             model_key=agent_model_key,
-            instruction="You are a helpful medical assistant. Answer the following medical question accurately. If it's multiple choice, provide the option letter and a brief explanation."
+            instruction="You are a helpful medical assistant. Answer the following medical question accurately. Respond in JSON format."
         )
 
         # Prepare the main prompt
@@ -731,40 +719,29 @@ class MDAgentsFramework:
         if options:
             options_str = "Options:\n" + "\n".join([f"({k}) {v}" for k, v in options.items()])
             main_prompt += f"{options_str}\n"
-            main_prompt += "\nProvide your answer in the format: Answer: (X) Explanation: [Your reasoning]"
+            main_prompt += "\nProvide your answer as a JSON object with 'answer' (letter for multiple-choice) and 'explanation' fields."
         else:  # Free form
-            main_prompt += "\nProvide your answer in the format: Answer: [Your answer] Explanation: [Your reasoning]"
+            main_prompt += "\nProvide your answer as a JSON object with 'answer' and 'explanation' fields."
 
         # Get the agent's response
         response = agent.chat(
             prompt=main_prompt,
             image_path=data_item.get('image_path'),
+            response_format={"type": "json_object"},
             temperature=0.2  # Lower temperature for more factual recall
         )
 
-        # Parse the response (extract Answer and Explanation)
-        predicted_answer = "Could not parse answer."
-        explanation = "Could not parse explanation."
-
+        # Parse the response
         try:
-            # Try to extract Answer and Explanation fields
-            if "Explanation:" in response:
-                ans_part, exp_part = response.split("Explanation:", 1)
-                explanation = exp_part.strip()
+            # Clean and parse the JSON response
+            response_clean = preprocess_response_string(response)
+            response_json = json.loads(response_clean)
 
-                if "Answer:" in ans_part:
-                    predicted_answer = ans_part.split("Answer:", 1)[1].strip()
-                else:  # If Answer marker is missing but Explanation is present
-                    predicted_answer = ans_part.strip()
-            elif "Answer:" in response:  # Only Answer found
-                predicted_answer = response.split("Answer:", 1)[1].strip()
-                explanation = "No explanation provided."
-            else:  # Neither marker found
-                predicted_answer = response.strip()  # Assume the whole response is the answer
-                explanation = "No specific explanation found in response."
+            predicted_answer = response_json.get("answer", "")
+            explanation = response_json.get("explanation", "No explanation provided.")
 
-            # Clean up common formats for multiple choice answers
-            if options:
+            # Clean up common formats for multiple choice answers if needed
+            if options and isinstance(predicted_answer, str):
                 # Format (B)
                 if predicted_answer.startswith('(') and predicted_answer.endswith(')'):
                     predicted_answer = predicted_answer[1:-1].strip()
@@ -777,7 +754,8 @@ class MDAgentsFramework:
 
         except Exception as e:
             print(f"Error parsing basic response: {e}. Raw response: {response}")
-            predicted_answer = response  # Fallback to raw response
+            predicted_answer = "Could not parse answer."
+            explanation = "Error parsing model response."
 
         print(f"Basic Query Result: Answer='{predicted_answer}', Explanation='{explanation[:100]}...'")
 
@@ -817,7 +795,7 @@ class MDAgentsFramework:
                 agent_id=agent_id,
                 role=config['role'],  # Use recruited role
                 model_key=agent_model_key,  # Use default agent model for all experts
-                instruction=f"You are a {config['role']} with expertise in {config['expertise']}. Collaborate with other medical experts to answer the medical query. Maintain your persona and provide insights based on your specialty."
+                instruction=f"You are a {config['role']} with expertise in {config['expertise']}. Collaborate with other medical experts to answer the medical query. Maintain your persona and provide insights based on your specialty. Respond in JSON format."
             )
 
             agents.append(agent)
@@ -851,45 +829,39 @@ class MDAgentsFramework:
 
             prompt = (
                 f"{question_context}\n"
-                f"Based on your expertise as a {agent.role}, provide your initial analysis and answer. "
-                f"Format as: Answer: [Your Answer] Explanation: [Your Reasoning]"
+                f"Based on your expertise as a {agent.role}, provide your initial analysis and answer.\n"
+                f"Respond with a JSON object containing 'answer' and 'explanation' fields."
             )
 
             response = agent.chat(
                 prompt=prompt,
                 image_path=image_path,
+                response_format={"type": "json_object"},
                 temperature=0.3  # Lower temperature for more focused analysis
             )
 
             # Parse response to extract answer and explanation
-            ans, expl = "Parsing failed", "Parsing failed"
             try:
-                if "Explanation:" in response:
-                    ans_part, exp_part = response.split("Explanation:", 1)
-                    expl = exp_part.strip()
+                # Clean and parse the JSON response
+                response_clean = preprocess_response_string(response)
+                response_json = json.loads(response_clean)
 
-                    if "Answer:" in ans_part:
-                        ans = ans_part.split("Answer:", 1)[1].strip()
-                    else:
-                        ans = ans_part.strip()
-                elif "Answer:" in response:
-                    ans = response.split("Answer:", 1)[1].strip()
-                    expl = "No explanation provided."
-                else:
-                    ans = response.strip()
-                    expl = "No specific explanation provided."
+                ans = response_json.get("answer", "")
+                expl = response_json.get("explanation", "No explanation provided.")
 
-                # MC Answer cleanup
-                if options and ans.startswith('(') and ans.endswith(')'):
-                    ans = ans[1:-1].strip()
-                elif options and ans.startswith('(') and len(ans) > 2 and ans[1].isalpha() and ans[2] == ')':
-                    ans = ans[1]  # Extract just the letter
-                elif options and len(ans) > 1 and ans[0].isalpha() and (ans[1] == '.' or ans[1] == ')'):
-                    ans = ans[0]  # Extract just the letter
+                # MC Answer cleanup if needed
+                if options and isinstance(ans, str):
+                    if ans.startswith('(') and ans.endswith(')'):
+                        ans = ans[1:-1].strip()
+                    elif ans.startswith('(') and len(ans) > 2 and ans[1].isalpha() and ans[2] == ')':
+                        ans = ans[1]  # Extract just the letter
+                    elif len(ans) > 1 and ans[0].isalpha() and (ans[1] == '.' or ans[1] == ')'):
+                        ans = ans[0]  # Extract just the letter
 
             except Exception as e:
-                print(f"Error parsing initial opinion from {agent.agent_id}: {e}")
-                ans = response  # Fallback
+                print(f"Error parsing initial opinion from {agent.agent_id}: {e}. Raw response: {response}")
+                ans = "Could not parse answer."
+                expl = "Error parsing model response."
 
             round_opinions[1][agent.agent_id] = {"answer": ans, "explanation": expl}
             initial_report_parts.append(f"Expert {agent.role} ({agent.agent_id}):\nAnswer: {ans}\nExplanation: {expl[:200]}...\n---")
@@ -913,45 +885,38 @@ class MDAgentsFramework:
             f"{''.join(initial_report_parts)}\n"
             f"--- End Opinions ---\n\n"
             f"Review these opinions carefully. Consider the different expert perspectives and their specific expertise.\n"
-            f"Provide the final consolidated answer and a supporting explanation.\n"
-            f"Format as: Final Answer: [Your Answer] Final Explanation: [Your Reasoning]"
+            f"Respond with a JSON object containing 'answer' (letter for multiple-choice) and 'explanation' fields."
         )
 
         # Get the decision maker's synthesis
         final_response = self.decision_maker_agent.chat(
             prompt=synthesis_prompt,
+            response_format={"type": "json_object"},
             temperature=0.2  # Low temperature for decisive answer
         )
 
         # Parse final response
-        final_answer, final_explanation = "Parsing failed", "Parsing failed"
         try:
-            if "Final Explanation:" in final_response:
-                ans_part, exp_part = final_response.split("Final Explanation:", 1)
-                final_explanation = exp_part.strip()
+            # Clean and parse the JSON response
+            response_clean = preprocess_response_string(final_response)
+            response_json = json.loads(response_clean)
 
-                if "Final Answer:" in ans_part:
-                    final_answer = ans_part.split("Final Answer:", 1)[1].strip()
-                else:
-                    final_answer = ans_part.strip()
-            elif "Final Answer:" in final_response:
-                final_answer = final_response.split("Final Answer:", 1)[1].strip()
-                final_explanation = "No final explanation provided."
-            else:
-                final_answer = final_response.strip()
-                final_explanation = "No specific final explanation provided."
+            final_answer = response_json.get("answer", "")
+            final_explanation = response_json.get("explanation", "No explanation provided.")
 
-            # MC Answer cleanup
-            if options and final_answer.startswith('(') and final_answer.endswith(')'):
-                final_answer = final_answer[1:-1].strip()
-            elif options and final_answer.startswith('(') and len(final_answer) > 2 and final_answer[1].isalpha() and final_answer[2] == ')':
-                final_answer = final_answer[1]  # Extract just the letter
-            elif options and len(final_answer) > 1 and final_answer[0].isalpha() and (final_answer[1] == '.' or final_answer[1] == ')'):
-                final_answer = final_answer[0]  # Extract just the letter
+            # MC Answer cleanup if needed
+            if options and isinstance(final_answer, str):
+                if final_answer.startswith('(') and final_answer.endswith(')'):
+                    final_answer = final_answer[1:-1].strip()
+                elif final_answer.startswith('(') and len(final_answer) > 2 and final_answer[1].isalpha() and final_answer[2] == ')':
+                    final_answer = final_answer[1]  # Extract just the letter
+                elif len(final_answer) > 1 and final_answer[0].isalpha() and (final_answer[1] == '.' or final_answer[1] == ')'):
+                    final_answer = final_answer[0]  # Extract just the letter
 
         except Exception as e:
-            print(f"Error parsing final decision: {e}")
-            final_answer = final_response  # Fallback
+            print(f"Error parsing final decision: {e}. Raw response: {final_response}")
+            final_answer = "Could not parse answer."
+            final_explanation = "Error parsing model response."
 
         print(f"Intermediate Query Final Result: Answer='{final_answer}', Explanation='{final_explanation[:100]}...'")
 
@@ -1013,7 +978,7 @@ class MDAgentsFramework:
                     agent_id=agent_id,
                     role=f"{member_config['role']}{' (Lead)' if is_lead else ''}",  # Indicate lead in role string
                     model_key=agent_model_key,  # Use default model for all team members
-                    instruction=f"{instruction_prefix} Collaborate within your team to achieve the goal: '{config['goal']}'."
+                    instruction=f"{instruction_prefix} Collaborate within your team to achieve the goal: '{config['goal']}'. Respond in JSON format."
                 )
 
                 members.append(agent)
@@ -1045,9 +1010,21 @@ class MDAgentsFramework:
         for group in groups:
             if "initial assessment" in group.goal.lower() or "iat" in group.goal.lower():
                 print(f"\n-- Processing Team: {group.group_id} ({group.goal}) --")
-                report = group.perform_internal_discussion()
-                team_reports[group.group_id] = report
-                initial_assessment_report = f"--- Report from {group.group_id} ({group.goal}) ---\n{report}\n---\n"
+                raw_report = group.perform_internal_discussion()
+
+                # Parse JSON report
+                try:
+                    response_clean = preprocess_response_string(raw_report)
+                    report_json = json.loads(response_clean)
+                    team_reports[group.group_id] = report_json
+                    initial_assessment_report = f"--- Report from {group.group_id} ({group.goal}) ---\n"
+                    initial_assessment_report += f"Answer: {report_json.get('answer', 'N/A')}\n"
+                    initial_assessment_report += f"Explanation: {report_json.get('explanation', 'No explanation provided.')}\n---\n"
+                except Exception as e:
+                    print(f"Error parsing team report: {e}. Raw report: {raw_report}")
+                    team_reports[group.group_id] = {"raw": raw_report}
+                    initial_assessment_report = f"--- Report from {group.group_id} ({group.goal}) ---\n{raw_report}\n---\n"
+
                 break  # Assume only one IAT
 
         # Process other diagnostic/specialty teams
@@ -1056,22 +1033,48 @@ class MDAgentsFramework:
                     "final review" in group.goal.lower() or "frdt" in group.goal.lower()):
                 print(f"\n-- Processing Team: {group.group_id} ({group.goal}) --")
                 # These teams can benefit from the IAT report (could pass it in future enhancement)
-                report = group.perform_internal_discussion()
-                team_reports[group.group_id] = report
-                diagnostic_reports += f"--- Report from {group.group_id} ({group.goal}) ---\n{report}\n---\n"
+                raw_report = group.perform_internal_discussion()
+
+                # Parse JSON report
+                try:
+                    response_clean = preprocess_response_string(raw_report)
+                    report_json = json.loads(response_clean)
+                    team_reports[group.group_id] = report_json
+                    team_report = f"--- Report from {group.group_id} ({group.goal}) ---\n"
+                    team_report += f"Answer: {report_json.get('answer', 'N/A')}\n"
+                    team_report += f"Explanation: {report_json.get('explanation', 'No explanation provided.')}\n---\n"
+                except Exception as e:
+                    print(f"Error parsing team report: {e}. Raw report: {raw_report}")
+                    team_reports[group.group_id] = {"raw": raw_report}
+                    team_report = f"--- Report from {group.group_id} ({group.goal}) ---\n{raw_report}\n---\n"
+
+                diagnostic_reports += team_report
 
         # Process FRDT (Final Review and Decision Team) last
-        final_decision_report_from_frdt = ""
+        final_decision_report_from_frdt = {}
         for group in groups:
             if "final review" in group.goal.lower() or "frdt" in group.goal.lower():
                 print(f"\n-- Processing Team: {group.group_id} ({group.goal}) --")
 
                 # FRDT needs previous reports
                 # In a future enhancement, we could modify the internal discussion to include previous reports
-                report = group.perform_internal_discussion()
-                team_reports[group.group_id] = report
-                final_decision_report_from_frdt = report  # Store the FRDT's output
-                final_review_report = f"--- Report from {group.group_id} ({group.goal}) ---\n{report}\n---\n"
+                raw_report = group.perform_internal_discussion()
+
+                # Parse JSON report
+                try:
+                    response_clean = preprocess_response_string(raw_report)
+                    report_json = json.loads(response_clean)
+                    team_reports[group.group_id] = report_json
+                    final_decision_report_from_frdt = report_json
+                    final_review_report = f"--- Report from {group.group_id} ({group.goal}) ---\n"
+                    final_review_report += f"Answer: {report_json.get('answer', 'N/A')}\n"
+                    final_review_report += f"Explanation: {report_json.get('explanation', 'No explanation provided.')}\n---\n"
+                except Exception as e:
+                    print(f"Error parsing team report: {e}. Raw report: {raw_report}")
+                    team_reports[group.group_id] = {"raw": raw_report}
+                    final_decision_report_from_frdt = {"raw": raw_report}
+                    final_review_report = f"--- Report from {group.group_id} ({group.goal}) ---\n{raw_report}\n---\n"
+
                 break  # Assume only one FRDT
 
         # 3. Final Decision Synthesis (using the dedicated decision maker agent)
@@ -1091,7 +1094,7 @@ class MDAgentsFramework:
             compiled_reports = "No team reports were generated."
             # Use FRDT report directly if available and others failed
             if final_decision_report_from_frdt:
-                compiled_reports = f"Using FRDT report directly:\n{final_decision_report_from_frdt}"
+                compiled_reports = f"Using FRDT report directly:\n{json.dumps(final_decision_report_from_frdt, indent=2)}"
 
         # Prepare the query context for the final decision
         options_str = ""
@@ -1107,46 +1110,39 @@ class MDAgentsFramework:
             f"{compiled_reports}\n"
             f"--- End Reports ---\n\n"
             f"Synthesize all this information into one final, definitive answer and explanation.\n"
-            f"Format as: Final Answer: [Your Answer] Final Explanation: [Your Reasoning]"
+            f"Respond with a JSON object containing 'answer' (letter for multiple-choice) and 'explanation' fields."
         )
 
         # Get the final decision
         final_response = self.decision_maker_agent.chat(
             prompt=synthesis_prompt,
+            response_format={"type": "json_object"},
             temperature=0.2  # Low temperature for decisive answer
         )
 
         # Parse final response
-        final_answer, final_explanation = "Parsing failed", "Parsing failed"
         try:
-            # Parse the response to extract answer and explanation
-            if "Final Explanation:" in final_response:
-                ans_part, exp_part = final_response.split("Final Explanation:", 1)
-                final_explanation = exp_part.strip()
+            # Clean and parse the JSON response
+            response_clean = preprocess_response_string(final_response)
+            response_json = json.loads(response_clean)
 
-                if "Final Answer:" in ans_part:
-                    final_answer = ans_part.split("Final Answer:", 1)[1].strip()
-                else:
-                    final_answer = ans_part.strip()
-            elif "Final Answer:" in final_response:
-                final_answer = final_response.split("Final Answer:", 1)[1].strip()
-                final_explanation = "No final explanation provided."
-            else:
-                final_answer = final_response.strip()
-                final_explanation = "No specific final explanation provided."
+            final_answer = response_json.get("answer", "")
+            final_explanation = response_json.get("explanation", "No explanation provided.")
 
-            # MC Answer cleanup
+            # MC Answer cleanup if needed
             options = data_item.get('options')
-            if options and final_answer.startswith('(') and final_answer.endswith(')'):
-                final_answer = final_answer[1:-1].strip()
-            elif options and final_answer.startswith('(') and len(final_answer) > 2 and final_answer[1].isalpha() and final_answer[2] == ')':
-                final_answer = final_answer[1]  # Extract just the letter
-            elif options and len(final_answer) > 1 and final_answer[0].isalpha() and (final_answer[1] == '.' or final_answer[1] == ')'):
-                final_answer = final_answer[0]  # Extract just the letter
+            if options and isinstance(final_answer, str):
+                if final_answer.startswith('(') and final_answer.endswith(')'):
+                    final_answer = final_answer[1:-1].strip()
+                elif final_answer.startswith('(') and len(final_answer) > 2 and final_answer[1].isalpha() and final_answer[2] == ')':
+                    final_answer = final_answer[1]  # Extract just the letter
+                elif len(final_answer) > 1 and final_answer[0].isalpha() and (final_answer[1] == '.' or final_answer[1] == ')'):
+                    final_answer = final_answer[0]  # Extract just the letter
 
         except Exception as e:
-            print(f"Error parsing final decision (advanced): {e}")
-            final_answer = final_response  # Fallback
+            print(f"Error parsing final decision (advanced): {e}. Raw response: {final_response}")
+            final_answer = "Could not parse answer."
+            final_explanation = "Error parsing model response."
 
         print(f"Advanced Query Final Result: Answer='{final_answer}', Explanation='{final_explanation[:100]}...'")
 
