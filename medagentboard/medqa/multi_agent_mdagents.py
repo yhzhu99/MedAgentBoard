@@ -80,8 +80,7 @@ class BaseAgent:
     def call_llm(self,
                  messages: List[Dict[str, Any]],
                  response_format: Optional[Dict[str, str]] = None, # e.g., {"type": "json_object"}
-                 max_retries: int = 3,
-                 temperature: float = 0.7) -> str:
+                 max_retries: int = 3) -> str:
         """
         Call the LLM with a list of messages and handle retries.
 
@@ -89,7 +88,6 @@ class BaseAgent:
             messages: List of message dictionaries (e.g., [{"role": "system", "content": "..."}, {"role": "user", "content": ...}]).
             response_format: Optional dictionary specifying the desired response format (e.g., JSON).
             max_retries: Maximum number of retry attempts.
-            temperature: Sampling temperature for the LLM call.
 
         Returns:
             LLM response text.
@@ -106,7 +104,6 @@ class BaseAgent:
                 completion_params = {
                     "model": self.model_name,
                     "messages": messages,
-                    "temperature": temperature,
                 }
                 if response_format:
                     completion_params["response_format"] = response_format
@@ -138,8 +135,7 @@ class BaseAgent:
              prompt: str,
              image_path: Optional[str] = None,
              use_memory: bool = True,
-             response_format: Optional[Dict[str, str]] = None,
-             temperature: float = 0.7) -> str:
+             response_format: Optional[Dict[str, str]] = None) -> str:
         """
         Simplified chat interface for an agent.
 
@@ -148,7 +144,6 @@ class BaseAgent:
             image_path: Optional path to an image file (for multimodal models).
             use_memory: Whether to include the agent's history in the LLM call.
             response_format: Optional dictionary specifying the desired response format.
-            temperature: Sampling temperature.
 
         Returns:
             The assistant's response text.
@@ -181,7 +176,7 @@ class BaseAgent:
         messages.append(user_message) # Add the current prompt
 
         # Call LLM
-        response = self.call_llm(messages, response_format=response_format, temperature=temperature)
+        response = self.call_llm(messages, response_format=response_format)
 
         return response
 
@@ -285,7 +280,6 @@ class Group:
         lead_request = self.lead_agent.chat(
             prompt=delivery_prompt,
             image_path=self.question_context.get('image_path'),
-            temperature=0.3  # Lower temperature for more focused request
         )
 
         self._log_interaction(f"Lead ({self.lead_agent.agent_id}) requested investigations/analysis:\n{lead_request}")
@@ -313,7 +307,6 @@ class Group:
             investigation = a_mem.chat(
                 prompt=investigation_prompt,
                 image_path=self.question_context.get('image_path'),
-                temperature=0.3  # Lower temperature for more analytical response
             )
 
             investigations.append({"role": a_mem.role, "id": a_mem.agent_id, "report": investigation})
@@ -350,7 +343,6 @@ class Group:
             prompt=synthesis_prompt,
             image_path=self.question_context.get('image_path'),
             response_format={"type": "json_object"},
-            temperature=0.2  # Lower temperature for more definitive answer
         )
 
         self._log_interaction(f"Lead ({self.lead_agent.agent_id}) generated final group report:\n{final_report[:200]}...")
@@ -466,7 +458,6 @@ class MDAgentsFramework:
             prompt=prompt,
             image_path=None,  # Don't use image for complexity check (relying on text description)
             response_format={"type": "json_object"},
-            temperature=0.1   # Low temp for more consistent classification
         )
 
         try:
@@ -556,7 +547,6 @@ class MDAgentsFramework:
                 prompt=prompt,
                 image_path=None,  # No need for image in recruitment
                 response_format={"type": "json_object"},
-                temperature=0.5   # Medium temperature for creativity in team composition
             )
 
             print(f"Recruiter Response (Intermediate):\n{recruitment_response}")
@@ -627,7 +617,6 @@ class MDAgentsFramework:
                 prompt=prompt,
                 image_path=None,  # No need for image in recruitment
                 response_format={"type": "json_object"},
-                temperature=0.5   # Medium temperature for creativity in team composition
             )
 
             print(f"Recruiter Response (Advanced):\n{recruitment_response}")
@@ -728,7 +717,6 @@ class MDAgentsFramework:
             prompt=main_prompt,
             image_path=data_item.get('image_path'),
             response_format={"type": "json_object"},
-            temperature=0.2  # Lower temperature for more factual recall
         )
 
         # Parse the response
@@ -836,7 +824,6 @@ class MDAgentsFramework:
                 prompt=prompt,
                 image_path=image_path,
                 response_format={"type": "json_object"},
-                temperature=0.3  # Lower temperature for more focused analysis
             )
 
             # Parse response to extract answer and explanation
@@ -891,7 +878,6 @@ class MDAgentsFramework:
         final_response = self.decision_maker_agent.chat(
             prompt=synthesis_prompt,
             response_format={"type": "json_object"},
-            temperature=0.2  # Low temperature for decisive answer
         )
 
         # Parse final response
@@ -1111,7 +1097,6 @@ class MDAgentsFramework:
         final_response = self.decision_maker_agent.chat(
             prompt=synthesis_prompt,
             response_format={"type": "json_object"},
-            temperature=0.2  # Low temperature for decisive answer
         )
 
         # Parse final response
