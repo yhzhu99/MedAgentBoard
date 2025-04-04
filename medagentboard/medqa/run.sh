@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # 设置并发数
-MAX_CONCURRENT=3
+MAX_CONCURRENT=4
 CURRENT_JOBS=0
 
 # 创建一个临时文件来跟踪正在运行的进程
@@ -66,32 +66,32 @@ for dataset in "${VQA_DATASETS[@]}"; do
     done
 done
 
-# 2. MDAgents
+# 2. MedAgent
 for dataset in "${QA_DATASETS[@]}"; do
     for qa_type in ${DATASET_QA_TYPES[$dataset]}; do
-        cmd="python -m medagentboard.medqa.multi_agent_mdagents --dataset $dataset --qa_type $qa_type --model deepseek-v3-ark --meta_model deepseek-v3-ark --decision_model deepseek-v3-ark"
+        cmd="python -m medagentboard.medqa.multi_agent_medagent --dataset $dataset --qa_type $qa_type --model deepseek-v3-ark --meta_model deepseek-v3-ark --decision_model deepseek-v3-ark"
         run_command "$cmd"
     done
 done
 
 for dataset in "${VQA_DATASETS[@]}"; do
     for qa_type in ${DATASET_QA_TYPES[$dataset]}; do
-        cmd="python -m medagentboard.medqa.multi_agent_mdagents --dataset $dataset --qa_type $qa_type --model qwen-vl-max --meta_model deepseek-v3-ark --decision_model qwen-vl-max"
+        cmd="python -m medagentboard.medqa.multi_agent_medagent --dataset $dataset --qa_type $qa_type --model qwen-vl-max --meta_model deepseek-v3-ark --decision_model qwen-vl-max"
         run_command "$cmd"
     done
 done
 
-# 3. MedAgent
+# 3. MDAgents
 for dataset in "${QA_DATASETS[@]}"; do
     for qa_type in ${DATASET_QA_TYPES[$dataset]}; do
-        cmd="python -m medagentboard.medqa.multi_agent_medagent --dataset $dataset --qa_type $qa_type --moderator_model deepseek-v3-ark --recruiter_model deepseek-v3-ark --agent_model deepseek-v3-ark"
+        cmd="python -m medagentboard.medqa.multi_agent_mdagents --dataset $dataset --qa_type $qa_type --moderator_model deepseek-v3-ark --recruiter_model deepseek-v3-ark --agent_model deepseek-v3-ark"
         run_command "$cmd"
     done
 done
 
 for dataset in "${VQA_DATASETS[@]}"; do
     for qa_type in ${DATASET_QA_TYPES[$dataset]}; do
-        cmd="python -m medagentboard.medqa.multi_agent_medagent --dataset $dataset --qa_type $qa_type --moderator_model deepseek-v3-ark --recruiter_model deepseek-v3-ark --agent_model qwen-vl-max"
+        cmd="python -m medagentboard.medqa.multi_agent_mdagents --dataset $dataset --qa_type $qa_type --moderator_model deepseek-v3-ark --recruiter_model deepseek-v3-ark --agent_model qwen-vl-max"
         run_command "$cmd"
     done
 done
