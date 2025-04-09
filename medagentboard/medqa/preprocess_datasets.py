@@ -6,8 +6,8 @@ import pandas as pd
 from medagentboard.utils.json_utils import save_json, load_json, load_jsonl
 
 # Define paths
-RAW_DATA_DIR = "./my_datasets/raw"
-PROCESSED_DATA_DIR = "./my_datasets/processed"
+RAW_DATA_DIR = "./my_datasets/raw/medqa"
+PROCESSED_DATA_DIR = "./my_datasets/processed/medqa"
 
 def random_select_samples(data: List[Dict[str, Any]], sample_size: int = 200, seed: int = 42) -> List[Dict[str, Any]]:
     """
@@ -39,7 +39,7 @@ def process_medqa(raw_dir=RAW_DATA_DIR, output_dir=PROCESSED_DATA_DIR, sample_si
     """
     # Define paths
     medqa_path = os.path.join(raw_dir, "MedQA", "questions", "US", "test.jsonl")
-    output_path = os.path.join(output_dir, "MedQA", "medqa_mc.json")
+    output_path = os.path.join(output_dir, "MedQA", "medqa_mc_test.json")
 
     # Create output directory if it doesn't exist
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -80,8 +80,8 @@ def process_pubmedqa(raw_dir=RAW_DATA_DIR, output_dir=PROCESSED_DATA_DIR, sample
     # Define paths
     ori_pqal_path = os.path.join(raw_dir, "PubMedQA", "ori_pqal.json")
     output_path_base = os.path.join(output_dir, "PubMedQA")
-    output_path_mc = os.path.join(output_path_base, "medqa_mc.json")
-    output_path_ff = os.path.join(output_path_base, "medqa_ff.json")
+    output_path_mc = os.path.join(output_path_base, "medqa_mc_test.json")
+    output_path_ff = os.path.join(output_path_base, "medqa_ff_test.json")
 
     # Create output directory if it doesn't exist
     os.makedirs(os.path.dirname(output_path_base), exist_ok=True)
@@ -156,7 +156,7 @@ def process_pathvqa(raw_dir=RAW_DATA_DIR, output_dir=PROCESSED_DATA_DIR, sample_
     """
     path_vqa_path = os.path.join(raw_dir, "PathVQA", "qas", "test", "test.pkl")
     path_vqa_images = os.path.join(raw_dir, "PathVQA", "images", "test")
-    output_path = os.path.join(output_dir, "PathVQA", "medqa_mc.json")
+    output_path = os.path.join(output_dir, "PathVQA", "medqa_mc_test.json")
 
     # Create output directory if it doesn't exist
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -213,8 +213,8 @@ def process_vqa_rad(raw_dir=RAW_DATA_DIR, output_dir=PROCESSED_DATA_DIR, sample_
     vqa_rad_path = os.path.join(raw_dir, "VQA-RAD", "testset.json")
     vqa_rad_images = os.path.join(raw_dir, "VQA-RAD", "images")
     output_path_base = os.path.join(output_dir, "VQA-RAD")
-    output_path_mc = os.path.join(output_path_base, "medqa_mc.json")
-    output_path_ff = os.path.join(output_path_base, "medqa_ff.json")
+    output_path_mc = os.path.join(output_path_base, "medqa_mc_test.json")
+    output_path_ff = os.path.join(output_path_base, "medqa_ff_test.json")
 
     # Create output directory if it doesn't exist
     os.makedirs(output_path_base, exist_ok=True)

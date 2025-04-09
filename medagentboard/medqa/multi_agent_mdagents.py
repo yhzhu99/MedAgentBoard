@@ -1248,10 +1248,10 @@ def main():
     method_name = "MDAgents"  # Identify the method
 
     # Format paths
-    data_path = f"./my_datasets/processed/{args.dataset}/medqa_{args.qa_type}.json"
+    data_path = f"./my_datasets/processed/medqa/{args.dataset}/medqa_{args.qa_type}_test.json"
 
     # Create logs directory structure consistent with ColaCare
-    logs_dir = os.path.join("./logs", args.dataset,
+    logs_dir = os.path.join("./logs", "medqa", args.dataset,
                            "multiple_choice" if args.qa_type == "mc" else "free-form",
                            method_name)
     os.makedirs(logs_dir, exist_ok=True)

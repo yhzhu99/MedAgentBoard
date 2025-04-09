@@ -573,11 +573,11 @@ def main():
     method = f"SingleLLM_{prompt_type}"
 
     # Set up data path
-    data_path = f"./my_datasets/processed/{dataset_name}/medqa_{qa_type}.json"
+    data_path = f"./my_datasets/processed/medqa/{dataset_name}/medqa_{qa_type}_test.json"
 
     # Set up logs directory
     qa_format_dir = "multiple_choice" if qa_type == "mc" else "free-form"
-    logs_dir = os.path.join("logs", dataset_name, qa_format_dir, method)
+    logs_dir = os.path.join("logs", "medqa", dataset_name, qa_format_dir, method)
     os.makedirs(logs_dir, exist_ok=True)
 
     print(f"Data path: {data_path}")

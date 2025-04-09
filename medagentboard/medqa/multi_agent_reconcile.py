@@ -696,11 +696,11 @@ def main():
     print(f"QA Format: {qa_type}")
 
     # Create logs directory structure
-    logs_dir = os.path.join("logs", dataset_name, "multiple_choice" if qa_type == "mc" else "free-form", method)
+    logs_dir = os.path.join("logs", "medqa", dataset_name, "multiple_choice" if qa_type == "mc" else "free-form", method)
     os.makedirs(logs_dir, exist_ok=True)
 
     # Construct the data path
-    data_path = os.path.join("my_datasets", "processed", args.dataset, f"medqa_{args.qa_type}.json")
+    data_path = os.path.join("my_datasets", "processed", "medqa", args.dataset, f"medqa_{args.qa_type}_test.json")
 
     # Load the dataset
     data = load_json(data_path)
