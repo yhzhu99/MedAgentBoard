@@ -79,6 +79,7 @@ def process_pubmedqa(raw_dir=RAW_DATA_DIR, output_dir=PROCESSED_DATA_DIR, sample
     """
     # Define paths
     ori_pqal_path = os.path.join(raw_dir, "PubMedQA", "ori_pqal.json")
+    test_ground_truth_path = os.path.join(raw_dir, "PubMedQA", "test_ground_truth.json")
     output_path_base = os.path.join(output_dir, "PubMedQA")
     output_path_mc = os.path.join(output_path_base, "medqa_mc_test.json")
     output_path_ff = os.path.join(output_path_base, "medqa_ff_test.json")
@@ -88,6 +89,7 @@ def process_pubmedqa(raw_dir=RAW_DATA_DIR, output_dir=PROCESSED_DATA_DIR, sample
 
     # Load datasets
     data = load_json(ori_pqal_path)
+    labels = load_json(test_ground_truth_path)
 
     # Define standard options
     options = {"A": "Yes", "B": "No", "C": "Maybe"}
@@ -97,6 +99,9 @@ def process_pubmedqa(raw_dir=RAW_DATA_DIR, output_dir=PROCESSED_DATA_DIR, sample
     processed_data_ff = []
 
     for qid, item_data in data.items():
+        # only qid in labels are test set
+        if qid not in labels:
+            continue
         context = " ".join(item_data["CONTEXTS"])  # Concatenate contexts into a single string
         question = item_data["QUESTION"]
         answer = item_data["final_decision"].capitalize()
@@ -112,7 +117,6 @@ def process_pubmedqa(raw_dir=RAW_DATA_DIR, output_dir=PROCESSED_DATA_DIR, sample
             f"{question}\n\n"
             f"Context: {context}"
         )
-
 
         # Add both versions to the processed data
         free_form_data = {
