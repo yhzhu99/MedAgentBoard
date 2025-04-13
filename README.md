@@ -1,5 +1,13 @@
 # MedAgentBoard
 
+## Related Paper
+
+- **WWW 2025** [ColaCare: Enhancing Electronic Health Record Modeling through Large Language Model-Driven Multi-Agent Collaboration](https://arxiv.org/abs/2410.02551)
+- **ACL 2024** [ReConcile: Round-Table Conference Improves Reasoning via Consensus among Diverse LLMs](https://arxiv.org/abs/2309.13007)
+- **NeurIPS 2024** [MDAgents: An Adaptive Collaboration of LLMs for Medical Decision-Making](https://proceedings.neurips.cc/paper_files/paper/2024/hash/90d1fc07f46e31387978b88e7e057a31-Abstract-Conference.html)
+
+- **ACL 2024 Findings** [MedAgents: Large Language Models as Collaborators for Zero-shot Medical Reasoning](https://aclanthology.org/2024.findings-acl.33/)
+
 ## Folder Structure
 
 ```
