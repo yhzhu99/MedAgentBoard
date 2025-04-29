@@ -81,4 +81,11 @@ LLM_MODELS_SETTINGS = {
         "comment": "qwen2.5-72b-instruct",
         "reasoning": False,
     },
+    "qwen3-235b-a22b": {
+        "api_key": os.getenv("DASHSCOPE_API_KEY"),
+        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "model_name": "qwen3-235b-a22b",
+        "comment": "qwen3-235b-a22b",
+        "reasoning": False,
+    },
 }

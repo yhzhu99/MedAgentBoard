@@ -83,9 +83,17 @@ class BaseAgent:
                 completion = self.client.chat.completions.create(
                     model=self.model_name,
                     messages=[system_message, user_message],
-                    response_format={"type": "json_object"}
+                    response_format={"type": "json_object"},
+                    extra_body={"enable_thinking": False},
+                    stream=True,
                 )
-                response = completion.choices[0].message.content
+                # Handle streaming response
+                response_chunks = []
+                for chunk in completion:
+                    if chunk.choices[0].delta.content is not None:
+                        response_chunks.append(chunk.choices[0].delta.content)
+
+                response = "".join(response_chunks)
                 print(f"Agent {self.agent_id} received response: {response[:50]}...")
                 return response
             except Exception as e:
@@ -830,7 +838,7 @@ def main():
                        help="Models used for doctor agents. Provide one model name per doctor.")
     args = parser.parse_args()
 
-    method = "ColaCare"
+    method = "ColaCare_diverseLLMs" # ColaCare by default
 
 
 
