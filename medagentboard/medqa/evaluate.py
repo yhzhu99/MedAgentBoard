@@ -158,7 +158,7 @@ if __name__ == "__main__":
             print(f"{'Model':<{MODEL_WIDTH}} | {'Metric':<{METRIC_WIDTH}} | {'Mean':>{VALUE_WIDTH}} | {'Std':>{VALUE_WIDTH}} | {'Total':>{TOTAL_WIDTH}}")
             print(f"{'-' * MODEL_WIDTH}-+-{'-' * METRIC_WIDTH}-+-{'-' * VALUE_WIDTH}-+-{'-' * VALUE_WIDTH}-+-{'-' * TOTAL_WIDTH}")
             
-            model_order = ["ColaCare", "MDAgents", "MedAgent", "ReConcile", "SingleLLM_zero_shot", "SingleLLM_few_shot", "SingleLLM_self_consistency", "SingleLLM_cot", "SingleLLM_cot_sc", "linkbert", "m3ae", "biomedgpt", "mumc"]
+            model_order = ["ColaCare", "MDAgents", "MedAgent", "ReConcile", "SingleLLM_zero_shot", "SingleLLM_few_shot", "SingleLLM_self_consistency", "SingleLLM_cot", "SingleLLM_cot_sc", "linkbert", "gatortron", "m3ae", "biomedgpt", "mumc"]
             
             if bootstrap:
                 for i in range(args.n_bootstrap):
