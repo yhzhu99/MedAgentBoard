@@ -160,14 +160,14 @@ class ProjectDirectorAgent(BaseAgent):
                 "You are an expert medical editor specializing in creating clear guidelines for "
                 "simplifying complex medical literature into accessible content for general audiences. "
                 "Your task is to analyze the provided medical text and create a comprehensive simplification "
-                "guideline that will help other agents produce an effective lay summary. "
+                "guideline that will help other agents produce an effective single-paragraph lay summary. "
                 "Your response should be in JSON format and include the following elements:\n"
                 "1. 'summary': A brief summary of the main points in the medical text\n"
                 "2. 'target_audience': Description of the intended audience for the simplified version\n"
                 "3. 'key_medical_concepts': List of important medical concepts that must be preserved\n"
                 "4. 'simplification_level': Suggested reading level (e.g., '8th grade', 'high school')\n"
                 "5. 'tone': Recommended tone for the simplified text\n"
-                "6. 'structure': Suggestions for organizing the simplified content\n"
+                "6. 'single_paragraph_focus': Specific instructions for creating a cohesive single paragraph\n"
                 "7. 'terminology_guidance': Advice on handling specific medical terms\n"
             )
         }
@@ -176,8 +176,8 @@ class ProjectDirectorAgent(BaseAgent):
             "role": "user",
             "content": (
                 f"Please create a simplification guideline for the following medical text. "
-                f"Focus on making this accessible to a general audience while preserving "
-                f"medical accuracy:\n\n{medical_text}"
+                f"Focus on making this accessible to a general audience in a single paragraph "
+                f"while preserving medical accuracy:\n\n{medical_text}"
             )
         }
 
@@ -197,7 +197,7 @@ class ProjectDirectorAgent(BaseAgent):
                 "key_medical_concepts": [],
                 "simplification_level": "High school",
                 "tone": "Informative and accessible",
-                "structure": "Sequential explanation",
+                "single_paragraph_focus": "Create a cohesive single paragraph summary",
                 "terminology_guidance": "Explain technical terms"
             }
             self.add_to_memory(fallback, "create_guideline_fallback")
@@ -206,8 +206,8 @@ class ProjectDirectorAgent(BaseAgent):
 
 class StructureAnalystAgent(BaseAgent):
     """
-    Structure Analyst agent responsible for analyzing and
-    creating a structural outline for the medical text.
+    Structure Analyst agent responsible for identifying key information
+    for the lay summary of medical text.
     """
 
     def __init__(
@@ -220,33 +220,33 @@ class StructureAnalystAgent(BaseAgent):
 
     def create_structural_outline(self, medical_text: str) -> Dict[str, Any]:
         """
-        Create a structural outline for the medical text.
+        Identify key information for the lay summary.
 
         Args:
             medical_text: Medical text to be simplified
 
         Returns:
-            Dictionary containing structural outline
+            Dictionary containing key information for the lay summary
         """
         system_message = {
             "role": "system",
             "content": (
-                "You are an expert in analyzing the structure and organization of medical literature. "
-                "Your task is to analyze the provided medical text and create a clear structural outline "
-                "that will guide the simplification process. Identify the main sections, key points, and "
-                "logical flow of the text. Your response should be in JSON format and include:\n"
-                "1. 'title': A simple, clear title for the simplified version\n"
-                "2. 'sections': A list of sections, each with a 'heading' and 'key_points'\n"
-                "3. 'logical_flow': Brief description of how ideas progress in the text\n"
-                "4. 'main_conclusion': The primary conclusion or finding of the medical text\n"
+                "You are an expert in analyzing medical literature and identifying the most important "
+                "information for a lay audience. Your task is to analyze the provided medical text and "
+                "identify the key elements that should be included in a single-paragraph lay summary. "
+                "Focus on extracting information about the scope of the study/review, main interventions, "
+                "key findings, and limitations. Your response should be in JSON format and include:\n"
+                "1. 'title': A simple, clear title for the summary\n"
+                "2. 'key_elements': A list of the most important information that should be included in the summary\n"
+                "3. 'main_conclusion': The primary conclusion or finding of the medical text\n"
             )
         }
 
         user_message = {
             "role": "user",
             "content": (
-                f"Please analyze the structure of the following medical text and create "
-                f"a clear outline that will help guide the simplification process:\n\n{medical_text}"
+                f"Please analyze the following medical text and identify the key information "
+                f"that should be included in a single-paragraph lay summary:\n\n{medical_text}"
             )
         }
 
@@ -254,7 +254,7 @@ class StructureAnalystAgent(BaseAgent):
 
         try:
             result = json.loads(preprocess_response_string(response_text))
-            print(f"Structure Analyst created structural outline")
+            print(f"Structure Analyst identified key information for lay summary")
             self.add_to_memory(result, "create_outline")
             return result
         except json.JSONDecodeError:
@@ -262,8 +262,7 @@ class StructureAnalystAgent(BaseAgent):
             # Create a basic fallback structure
             fallback = {
                 "title": "Medical Text Summary",
-                "sections": [{"heading": "Main Content", "key_points": ["Key information from the medical text"]}],
-                "logical_flow": "Sequential presentation of information",
+                "key_elements": ["Key information from the medical text"],
                 "main_conclusion": "Primary finding or conclusion"
             }
             self.add_to_memory(fallback, "create_outline_fallback")
@@ -273,7 +272,7 @@ class StructureAnalystAgent(BaseAgent):
 class ContentSimplifierAgent(BaseAgent):
     """
     Content Simplifier agent responsible for the initial
-    simplification of the medical text.
+    simplification of the medical text into a single paragraph.
     """
 
     def __init__(
@@ -291,12 +290,12 @@ class ContentSimplifierAgent(BaseAgent):
         outline: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        Perform initial simplification of the medical text.
+        Perform initial simplification of the medical text into a single paragraph.
 
         Args:
             medical_text: Medical text to be simplified
             guideline: Simplification guideline from Project Director
-            outline: Structural outline from Structure Analyst
+            outline: Key information from Structure Analyst
 
         Returns:
             Dictionary containing simplified content
@@ -305,16 +304,17 @@ class ContentSimplifierAgent(BaseAgent):
             "role": "system",
             "content": (
                 "You are an expert in simplifying complex medical content for general audiences. "
-                "Your task is to transform the provided medical text into a simplified version that is "
-                "accessible to non-experts while maintaining accuracy. Follow the provided guideline and "
-                "structural outline. Apply techniques such as:\n"
+                "Your task is to transform the provided medical text into a simplified, single-paragraph "
+                "lay summary that is accessible to non-experts while maintaining accuracy. "
+                "The summary should include the scope of the study/review, main interventions, key findings, "
+                "and any important limitations or uncertainties. Follow the provided guideline and "
+                "focus on the key elements identified. Apply techniques such as:\n"
                 "- Simplifying complex sentences\n"
                 "- Replacing technical terms with plain language\n"
-                "- Reorganizing information for clarity\n"
-                "- Removing unnecessary details\n"
+                "- Focusing on the most important information\n"
                 "- Using active voice and direct language\n"
                 "Your response should be in JSON format and include:\n"
-                "1. 'simplified_text': The simplified version of the medical text\n"
+                "1. 'lay_summary': A single-paragraph simplified version of the medical text\n"
                 "2. 'simplification_techniques': Brief explanation of techniques used\n"
             )
         }
@@ -326,11 +326,11 @@ class ContentSimplifierAgent(BaseAgent):
         user_message = {
             "role": "user",
             "content": (
-                f"Please simplify the following medical text according to the guideline "
-                f"and structural outline provided:\n\n"
+                f"Please simplify the following medical text into a single-paragraph lay summary "
+                f"according to the guideline and focusing on the key elements identified:\n\n"
                 f"MEDICAL TEXT:\n{medical_text}\n\n"
                 f"GUIDELINE:\n{guideline_text}\n\n"
-                f"STRUCTURAL OUTLINE:\n{outline_text}"
+                f"KEY INFORMATION:\n{outline_text}"
             )
         }
 
@@ -338,14 +338,14 @@ class ContentSimplifierAgent(BaseAgent):
 
         try:
             result = json.loads(preprocess_response_string(response_text))
-            print(f"Content Simplifier created simplified content")
+            print(f"Content Simplifier created single-paragraph lay summary")
             self.add_to_memory(result, "simplify_content")
             return result
         except json.JSONDecodeError:
             print("Failed to parse Content Simplifier response as JSON")
             # Create a basic fallback result
             fallback = {
-                "simplified_text": "Simplified version of the medical text.",
+                "lay_summary": "Simplified version of the medical text.",
                 "simplification_techniques": "Basic simplification applied"
             }
             self.add_to_memory(fallback, "simplify_content_fallback")
@@ -387,12 +387,12 @@ class SimplifySupervisorAgent(BaseAgent):
             "role": "system",
             "content": (
                 "You are an expert editor specialized in reviewing simplified medical content. "
-                "Your task is to critically review a simplified version of medical text and provide "
+                "Your task is to critically review a single-paragraph lay summary of medical text and provide "
                 "constructive feedback to improve its accessibility while ensuring medical accuracy. "
                 "Consider aspects such as:\n"
                 "- Accuracy of medical information\n"
                 "- Appropriate language level for target audience\n"
-                "- Clarity and logical flow\n"
+                "- Clarity and logical flow in a single paragraph\n"
                 "- Appropriate handling of medical terminology\n"
                 "- Areas that need further simplification\n"
                 "Your response should be in JSON format and include:\n"
@@ -400,7 +400,7 @@ class SimplifySupervisorAgent(BaseAgent):
                 "2. 'accuracy_issues': Any inaccuracies or omissions of important information\n"
                 "3. 'clarity_issues': Areas that could be clearer or more accessible\n"
                 "4. 'suggested_improvements': Specific suggestions for improvement\n"
-                "5. 'revised_text': An improved version incorporating your suggestions\n"
+                "5. 'revised_summary': An improved version incorporating your suggestions, still as a single paragraph\n"
             )
         }
 
@@ -410,10 +410,10 @@ class SimplifySupervisorAgent(BaseAgent):
         user_message = {
             "role": "user",
             "content": (
-                f"Please review the following simplified medical text against the original "
+                f"Please review the following single-paragraph lay summary against the original "
                 f"text and the simplification guideline:\n\n"
                 f"ORIGINAL TEXT:\n{original_text}\n\n"
-                f"SIMPLIFIED TEXT:\n{simplified_text}\n\n"
+                f"LAY SUMMARY:\n{simplified_text}\n\n"
                 f"GUIDELINE:\n{guideline_text}"
             )
         }
@@ -433,7 +433,7 @@ class SimplifySupervisorAgent(BaseAgent):
                 "accuracy_issues": "None identified",
                 "clarity_issues": "Some areas may need clarification",
                 "suggested_improvements": "Consider simplifying further",
-                "revised_text": simplified_text
+                "revised_summary": simplified_text
             }
             self.add_to_memory(fallback, "review_simplification_fallback")
             return fallback
@@ -471,13 +471,14 @@ class MetaphorAnalystAgent(BaseAgent):
         system_message = {
             "role": "system",
             "content": (
-                "You are an expert in explaining complex medical concepts through metaphors, "
-                "analogies, and plain language. Your task is to identify complex concepts in "
-                "the provided medical text and develop clear, relatable explanations using everyday "
-                "comparisons that a general audience can understand. Your response should be in JSON format and include:\n"
+                "You are an expert in explaining complex medical concepts through metaphors and "
+                "analogies in plain language. Your task is to identify complex concepts in "
+                "the provided lay summary and enhance it with clear, relatable explanations using everyday "
+                "comparisons that a general audience can understand. Maintain the single paragraph format. "
+                "Your response should be in JSON format and include:\n"
                 "1. 'identified_concepts': List of complex medical concepts identified\n"
                 "2. 'metaphorical_explanations': For each concept, provide a metaphor or analogy\n"
-                "3. 'simplified_text': The text with metaphorical explanations integrated\n"
+                "3. 'enhanced_summary': The single-paragraph summary with metaphorical explanations integrated\n"
             )
         }
 
@@ -487,9 +488,10 @@ class MetaphorAnalystAgent(BaseAgent):
         user_message = {
             "role": "user",
             "content": (
-                f"Please analyze the following medical text, identify complex concepts, "
-                f"and provide metaphorical explanations according to the simplification guideline:\n\n"
-                f"MEDICAL TEXT:\n{medical_text}\n\n"
+                f"Please analyze the following lay summary, identify complex concepts, "
+                f"and enhance it with metaphorical explanations while maintaining a single paragraph "
+                f"format according to the simplification guideline:\n\n"
+                f"LAY SUMMARY:\n{medical_text}\n\n"
                 f"GUIDELINE:\n{guideline_text}"
             )
         }
@@ -514,7 +516,7 @@ class MetaphorAnalystAgent(BaseAgent):
             fallback = {
                 "identified_concepts": ["medical concept"],
                 "metaphorical_explanations": {"medical concept": "simplified explanation"},
-                "simplified_text": medical_text
+                "enhanced_summary": medical_text
             }
             self.add_to_memory(fallback, "metaphor_analysis_fallback")
             return fallback
@@ -554,12 +556,11 @@ class TerminologyInterpreterAgent(BaseAgent):
             "content": (
                 "You are an expert in medical terminology who specializes in translating technical "
                 "terms into plain language for general audiences. Your task is to identify medical "
-                "terms in the provided text and provide clear, accessible explanations. Your response "
-                "should be in JSON format and include:\n"
+                "terms in the provided lay summary and ensure they are explained in clear, accessible language. "
+                "Maintain the single paragraph format. Your response should be in JSON format and include:\n"
                 "1. 'identified_terms': List of medical terms identified\n"
                 "2. 'term_explanations': For each term, provide a plain language explanation\n"
-                "3. 'simplified_text': The text with technical terms either replaced or followed by "
-                "plain language explanations in parentheses\n"
+                "3. 'clarified_summary': The single-paragraph summary with medical terms clarified\n"
             )
         }
 
@@ -569,9 +570,9 @@ class TerminologyInterpreterAgent(BaseAgent):
         user_message = {
             "role": "user",
             "content": (
-                f"Please identify and explain medical terminology in the following text "
-                f"according to the simplification guideline:\n\n"
-                f"MEDICAL TEXT:\n{medical_text}\n\n"
+                f"Please identify and explain medical terminology in the following lay summary "
+                f"while maintaining a single paragraph format according to the simplification guideline:\n\n"
+                f"LAY SUMMARY:\n{medical_text}\n\n"
                 f"GUIDELINE:\n{guideline_text}"
             )
         }
@@ -596,7 +597,7 @@ class TerminologyInterpreterAgent(BaseAgent):
             fallback = {
                 "identified_terms": ["medical term"],
                 "term_explanations": {"medical term": "plain language explanation"},
-                "simplified_text": medical_text
+                "clarified_summary": medical_text
             }
             self.add_to_memory(fallback, "terminology_interpretation_fallback")
             return fallback
@@ -641,10 +642,10 @@ class ContentIntegratorAgent(BaseAgent):
             "role": "system",
             "content": (
                 "You are an expert in integrating different perspectives of simplified medical content. "
-                "Your task is to merge different simplified versions of a medical text into a cohesive, "
-                "accessible version that incorporates the strengths of each approach. Your response should "
+                "Your task is to merge different versions of a medical lay summary into a cohesive, "
+                "accessible single paragraph that incorporates the strengths of each approach. Your response should "
                 "be in JSON format and include:\n"
-                "1. 'integrated_text': The cohesive text combining the best elements from each version\n"
+                "1. 'integrated_summary': The cohesive single-paragraph summary combining the best elements\n"
                 "2. 'integration_approach': Brief explanation of how you combined the different versions\n"
             )
         }
@@ -655,8 +656,8 @@ class ContentIntegratorAgent(BaseAgent):
         user_message = {
             "role": "user",
             "content": (
-                f"Please integrate the following simplified versions of a medical text "
-                f"according to the simplification guideline:\n\n"
+                f"Please integrate the following versions of a medical lay summary "
+                f"into a single cohesive paragraph according to the simplification guideline:\n\n"
                 f"ORIGINAL TEXT:\n{original_text}\n\n"
                 f"BASIC SIMPLIFIED VERSION:\n{simplified_text}\n\n"
                 f"METAPHORICAL VERSION:\n{metaphorical_text}\n\n"
@@ -676,7 +677,7 @@ class ContentIntegratorAgent(BaseAgent):
             print("Failed to parse Content Integrator response as JSON")
             # Create a basic fallback result
             fallback = {
-                "integrated_text": simplified_text,
+                "integrated_summary": simplified_text,
                 "integration_approach": "Basic integration of simplified versions"
             }
             self.add_to_memory(fallback, "content_integration_fallback")
@@ -697,7 +698,7 @@ class ArticleArchitectAgent(BaseAgent):
         """Initialize the Article Architect agent."""
         super().__init__(agent_id, AgentRole.ARTICLE_ARCHITECT, model_key)
 
-    def construct_article(
+    def construct_summary(
         self,
         simplified_texts: List[str],
         guideline: Dict[str, Any],
@@ -705,26 +706,26 @@ class ArticleArchitectAgent(BaseAgent):
         strategy: ConstructionStrategy = ConstructionStrategy.DIRECT
     ) -> Dict[str, Any]:
         """
-        Construct a coherent article from simplified text chunks.
+        Construct a coherent single-paragraph summary from simplified text chunks.
 
         Args:
             simplified_texts: List of simplified text chunks
             guideline: Simplification guideline
-            outline: Structural outline
+            outline: Key information outline
             strategy: Construction strategy (Direct or Iterative)
 
         Returns:
-            Dictionary containing the constructed article
+            Dictionary containing the constructed summary
         """
         system_message = {
             "role": "system",
             "content": (
                 "You are an expert in structuring medical content for general audiences. "
-                "Your task is to organize simplified medical text chunks into a coherent, "
-                "well-structured article that follows a logical flow. Ensure the article "
-                "adheres to the provided guideline and structural outline. Your response "
+                "Your task is to organize simplified medical text chunks into a cohesive, "
+                "well-structured single paragraph that follows a logical flow. Ensure the summary "
+                "adheres to the provided guideline and covers the key information identified. Your response "
                 "should be in JSON format and include:\n"
-                "1. 'constructed_article': The complete, well-structured article\n"
+                "1. 'lay_summary': The complete, cohesive single-paragraph lay summary\n"
                 "2. 'construction_approach': Brief explanation of how you structured the content\n"
             )
         }
@@ -746,11 +747,11 @@ class ArticleArchitectAgent(BaseAgent):
         user_message = {
             "role": "user",
             "content": (
-                f"Please construct a coherent article from the following simplified text chunks "
-                f"using a {strategy_text} approach. Follow the provided guideline and structural outline:\n\n"
+                f"Please construct a cohesive single-paragraph lay summary from the following simplified text chunks "
+                f"using a {strategy_text} approach. Follow the provided guideline and cover the key information:\n\n"
                 f"SIMPLIFIED TEXT CHUNKS:\n{combined_chunks}\n\n"
                 f"GUIDELINE:\n{guideline_text}\n\n"
-                f"STRUCTURAL OUTLINE:\n{outline_text}"
+                f"KEY INFORMATION:\n{outline_text}"
             )
         }
 
@@ -758,17 +759,17 @@ class ArticleArchitectAgent(BaseAgent):
 
         try:
             result = json.loads(preprocess_response_string(response_text))
-            print(f"Article Architect constructed article using {strategy.value} strategy")
-            self.add_to_memory(result, "article_construction")
+            print(f"Article Architect constructed single-paragraph summary using {strategy.value} strategy")
+            self.add_to_memory(result, "summary_construction")
             return result
         except json.JSONDecodeError:
             print("Failed to parse Article Architect response as JSON")
             # Create a basic fallback result
             fallback = {
-                "constructed_article": "\n\n".join(simplified_texts),
+                "lay_summary": "\n\n".join(simplified_texts),
                 "construction_approach": f"Basic {strategy.value} construction"
             }
-            self.add_to_memory(fallback, "article_construction_fallback")
+            self.add_to_memory(fallback, "summary_construction_fallback")
             return fallback
 
 
@@ -789,30 +790,31 @@ class ProofreaderAgent(BaseAgent):
     def proofread(
         self,
         original_text: str,
-        simplified_article: str,
+        simplified_summary: str,
         guideline: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        Perform final proofreading of the simplified article.
+        Perform final proofreading of the simplified summary.
 
         Args:
             original_text: Original medical text
-            simplified_article: Simplified article to proofread
+            simplified_summary: Simplified summary to proofread
             guideline: Simplification guideline
 
         Returns:
-            Dictionary containing the proofread article
+            Dictionary containing the proofread summary
         """
         system_message = {
             "role": "system",
             "content": (
                 "You are an expert medical editor specializing in proofreading simplified medical content. "
-                "Your task is to review the simplified article for accuracy, clarity, consistency, and "
-                "adherence to the simplification guideline. Check for grammar, spelling, flow, and ensure "
-                "medical accuracy is maintained. Your response should be in JSON format and include:\n"
+                "Your task is to review the simplified single-paragraph lay summary for accuracy, clarity, "
+                "consistency, and adherence to the simplification guideline. Check for grammar, spelling, flow, "
+                "and ensure medical accuracy is maintained while keeping the language accessible to general audiences. "
+                "Your response should be in JSON format and include:\n"
                 "1. 'issues_identified': List of issues found (accuracy, clarity, grammar, etc.)\n"
                 "2. 'corrections_made': Description of corrections applied\n"
-                "3. 'final_article': The final, proofread article\n"
+                "3. 'final_summary': The final, proofread single-paragraph lay summary\n"
             )
         }
 
@@ -822,11 +824,11 @@ class ProofreaderAgent(BaseAgent):
         user_message = {
             "role": "user",
             "content": (
-                f"Please proofread the following simplified medical article. "
+                f"Please proofread the following single-paragraph lay summary. "
                 f"Ensure it accurately reflects the original text while maintaining "
                 f"accessibility according to the guideline:\n\n"
                 f"ORIGINAL TEXT:\n{original_text}\n\n"
-                f"SIMPLIFIED ARTICLE:\n{simplified_article}\n\n"
+                f"LAY SUMMARY:\n{simplified_summary}\n\n"
                 f"GUIDELINE:\n{guideline_text}"
             )
         }
@@ -835,7 +837,7 @@ class ProofreaderAgent(BaseAgent):
 
         try:
             result = json.loads(preprocess_response_string(response_text))
-            print(f"Proofreader completed final review")
+            print(f"Proofreader completed final review of lay summary")
             self.add_to_memory(result, "proofreading")
             return result
         except json.JSONDecodeError:
@@ -844,7 +846,7 @@ class ProofreaderAgent(BaseAgent):
             fallback = {
                 "issues_identified": ["No major issues identified"],
                 "corrections_made": "Minor grammar and clarity improvements",
-                "final_article": simplified_article
+                "final_summary": simplified_summary
             }
             self.add_to_memory(fallback, "proofreading_fallback")
             return fallback
@@ -890,7 +892,7 @@ class AgentSimpCoordinator:
 
     def simplify_document(self, medical_text: str, chunk_size: int = 2000) -> Dict[str, Any]:
         """
-        Simplify a medical document using the AgentSimp approach.
+        Simplify a medical document into a single-paragraph lay summary.
 
         Args:
             medical_text: Medical text to be simplified
@@ -920,129 +922,86 @@ class AgentSimpCoordinator:
             "output": guideline
         })
 
-        # 1.2: Structure Analyst creates structural outline
-        print("1.2: Creating structural outline")
-        outline = self.structure_analyst.create_structural_outline(medical_text)
+        # 1.2: Structure Analyst identifies key information
+        print("1.2: Identifying key information")
+        key_info = self.structure_analyst.create_structural_outline(medical_text)
         process_log["steps"].append({
             "step": "1.2",
             "agent": "Structure Analyst",
-            "action": "Create Outline",
-            "output": outline
+            "action": "Identify Key Information",
+            "output": key_info
         })
 
-        # Step 2: Divide text into chunks for processing
-        # For simplicity, split by paragraphs and recombine if needed to meet chunk size
-        paragraphs = medical_text.split('\n\n')
-        chunks = []
-        current_chunk = ""
+        # Step 2: Initial Content Simplification
+        print("Step 2: Initial Content Simplification")
+        simplified_result = self.content_simplifier.simplify_content(medical_text, guideline, key_info)
+        lay_summary = simplified_result.get("lay_summary", "")
 
-        for paragraph in paragraphs:
-            if len(current_chunk) + len(paragraph) <= chunk_size:
-                current_chunk += paragraph + "\n\n"
-            else:
-                if current_chunk:
-                    chunks.append(current_chunk.strip())
-                current_chunk = paragraph + "\n\n"
+        if not isinstance(lay_summary, str):
+            lay_summary = str(lay_summary)
 
-        if current_chunk:
-            chunks.append(current_chunk.strip())
-
-        process_log["chunks"] = len(chunks)
-        print(f"Divided text into {len(chunks)} chunks")
-
-        # Step 3: Process each chunk based on communication strategy
-        print(f"Step 3: Processing chunks using {self.communication_strategy.value} strategy")
-
-        simplified_chunks = []
-        chunk_logs = []
-
-        for i, chunk in enumerate(chunks):
-            print(f"Processing chunk {i+1}/{len(chunks)}")
-            chunk_log = {"chunk_index": i, "original_chunk": chunk}
-
-            if self.communication_strategy == CommunicationStrategy.PIPELINE:
-                # Pipeline strategy: sequential processing
-                # 3.1: Content Simplifier performs initial simplification
-                simplified_result = self.content_simplifier.simplify_content(chunk, guideline, outline)
-                simplified_text = simplified_result["simplified_text"]
-                chunk_log["simplifier_output"] = simplified_result
-
-                # 3.2: Simplify Supervisor reviews and improves
-                review_result = self.simplify_supervisor.review_simplification(chunk, simplified_text, guideline)
-                supervised_text = review_result["revised_text"]
-                chunk_log["supervisor_output"] = review_result
-
-                # 3.3: Metaphor Analyst provides metaphorical explanations
-                metaphor_result = self.metaphor_analyst.analyze_and_simplify(supervised_text, guideline)
-                metaphorical_text = metaphor_result["simplified_text"]
-                chunk_log["metaphor_output"] = metaphor_result
-
-                # 3.4: Terminology Interpreter explains medical terms
-                terminology_result = self.terminology_interpreter.interpret_terminology(metaphorical_text, guideline)
-                final_chunk_text = terminology_result["simplified_text"]
-                chunk_log["terminology_output"] = terminology_result
-
-                # Ensure final_chunk_text is a string
-                if not isinstance(final_chunk_text, str):
-                    final_chunk_text = str(final_chunk_text)
-
-                simplified_chunks.append(final_chunk_text)
-
-            else:  # SYNCHRONOUS strategy
-                # Synchronous strategy: parallel processing
-                # 3.1: Content Simplifier performs initial simplification
-                simplified_result = self.content_simplifier.simplify_content(chunk, guideline, outline)
-                simplified_text = simplified_result["simplified_text"]
-                chunk_log["simplifier_output"] = simplified_result
-
-                # 3.2: Metaphor Analyst provides metaphorical explanations
-                metaphor_result = self.metaphor_analyst.analyze_and_simplify(chunk, guideline)
-                metaphorical_text = metaphor_result["simplified_text"]
-                chunk_log["metaphor_output"] = metaphor_result
-
-                # 3.3: Terminology Interpreter explains medical terms
-                terminology_result = self.terminology_interpreter.interpret_terminology(chunk, guideline)
-                terminology_text = terminology_result["simplified_text"]
-                chunk_log["terminology_output"] = terminology_result
-
-                # 3.4: Content Integrator merges all perspectives
-                integration_result = self.content_integrator.integrate_content(
-                    chunk, simplified_text, metaphorical_text, terminology_text, guideline
-                )
-                integrated_text = integration_result["integrated_text"]
-                chunk_log["integrator_output"] = integration_result
-
-                # Ensure integrated_text is a string
-                if not isinstance(integrated_text, str):
-                    integrated_text = str(integrated_text)
-
-                simplified_chunks.append(integrated_text)
-
-            chunk_logs.append(chunk_log)
-
-        process_log["chunk_logs"] = chunk_logs
-
-        # Step 4: Reconstruction and Revision
-        print(f"Step 4: Reconstruction using {self.construction_strategy.value} strategy")
-
-        # 4.1: Article Architect constructs the full article
-        construction_result = self.article_architect.construct_article(
-            simplified_chunks, guideline, outline, self.construction_strategy
-        )
-        constructed_article = construction_result["constructed_article"]
         process_log["steps"].append({
-            "step": "4.1",
-            "agent": "Article Architect",
-            "action": "Construct Article",
-            "output": construction_result
+            "step": "2",
+            "agent": "Content Simplifier",
+            "action": "Create Lay Summary",
+            "output": simplified_result
         })
 
-        # 4.2: Proofreader performs final review
-        print("4.2: Final proofreading")
-        proofread_result = self.proofreader.proofread(medical_text, constructed_article, guideline)
-        final_article = proofread_result["final_article"]
+        # Step 3: Review and Refinement
+        print("Step 3: Review and Refinement")
+
+        # 3.1: Simplify Supervisor reviews and improves
+        review_result = self.simplify_supervisor.review_simplification(medical_text, lay_summary, guideline)
+        supervised_summary = review_result.get("revised_summary", lay_summary)
+
+        if not isinstance(supervised_summary, str):
+            supervised_summary = str(supervised_summary)
+
         process_log["steps"].append({
-            "step": "4.2",
+            "step": "3.1",
+            "agent": "Simplify Supervisor",
+            "action": "Review Lay Summary",
+            "output": review_result
+        })
+
+        # 3.2: Metaphor Analyst enhances accessibility
+        metaphor_result = self.metaphor_analyst.analyze_and_simplify(supervised_summary, guideline)
+        metaphorical_summary = metaphor_result.get("enhanced_summary", supervised_summary)
+
+        if not isinstance(metaphorical_summary, str):
+            metaphorical_summary = str(metaphorical_summary)
+
+        process_log["steps"].append({
+            "step": "3.2",
+            "agent": "Metaphor Analyst",
+            "action": "Enhance Accessibility",
+            "output": metaphor_result
+        })
+
+        # 3.3: Terminology Interpreter ensures plain language
+        terminology_result = self.terminology_interpreter.interpret_terminology(metaphorical_summary, guideline)
+        interpreted_summary = terminology_result.get("clarified_summary", metaphorical_summary)
+
+        if not isinstance(interpreted_summary, str):
+            interpreted_summary = str(interpreted_summary)
+
+        process_log["steps"].append({
+            "step": "3.3",
+            "agent": "Terminology Interpreter",
+            "action": "Ensure Plain Language",
+            "output": terminology_result
+        })
+
+        # Step 4: Final Review
+        print("Step 4: Final Review")
+        proofread_result = self.proofreader.proofread(medical_text, interpreted_summary, guideline)
+        final_summary = proofread_result.get("final_summary", interpreted_summary)
+
+        if not isinstance(final_summary, str):
+            final_summary = str(final_summary)
+
+        process_log["steps"].append({
+            "step": "4",
             "agent": "Proofreader",
             "action": "Final Review",
             "output": proofread_result
@@ -1055,12 +1014,12 @@ class AgentSimpCoordinator:
         # Return final result
         result = {
             "original_text": medical_text,
-            "simplified_text": final_article,
+            "lay_summary": final_summary,
             "processing_time": processing_time,
             "process_log": process_log
         }
 
-        print(f"Document simplification completed in {processing_time:.2f} seconds")
+        print(f"Lay summary generation completed in {processing_time:.2f} seconds")
         return result
 
 
@@ -1117,12 +1076,12 @@ def process_dataset(
             # Generate lay summary
             result = coordinator.simplify_document(source_text)
 
-            # Prepare output
+            # Prepare output with just the lay summary as a string
             output = {
                 "id": sample_id,
                 "source": source_text,
                 "target": target_text,
-                "pred": result["simplified_text"],
+                "pred": result["lay_summary"],  # Store just the lay summary as a string
                 "metadata": {
                     "model": model_key,
                     "communication_strategy": communication_strategy.value,
