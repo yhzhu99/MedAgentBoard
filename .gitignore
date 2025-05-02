@@ -1,5 +1,6 @@
 my_datasets/
 logs/
+prompt_*.txt
 
 *.json
 test_img.jpg
