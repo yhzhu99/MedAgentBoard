@@ -574,7 +574,7 @@ def process_item(item: Dict[str, Any],
         "timestamp": int(time.time()),
         "question": question,
         "ground_truth": ground_truth,
-        "predicted_probability": discussion_result["final_prediction"],
+        "predicted_value": discussion_result["final_prediction"],
         "case_history": discussion_result,
     }
 
