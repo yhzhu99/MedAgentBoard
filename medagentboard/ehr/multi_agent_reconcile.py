@@ -523,7 +523,7 @@ class ReconcileCoordinator:
         discussion_history.append({
             "phase": DiscussionPhase.FINAL.value,
             "final_prediction": final_prediction,
-            "consensus_reached": consensus_reached,
+            "consensus_reached": 1 if consensus_reached else 0,
             "rounds_completed": round_num,
             "individual_predictions": [p.get("prediction", 0.5) for p in current_predictions],
             "confidence_scores": [p.get("confidence", 0.0) for p in current_predictions]
