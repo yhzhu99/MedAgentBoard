@@ -86,6 +86,6 @@ LLM_MODELS_SETTINGS = {
         "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
         "model_name": "qwen3-235b-a22b",
         "comment": "qwen3-235b-a22b",
-        "reasoning": False,
+        "reasoning": True,
     },
 }
