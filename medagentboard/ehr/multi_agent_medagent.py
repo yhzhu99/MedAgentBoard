@@ -903,7 +903,7 @@ def main():
                 "timestamp": int(time.time()),
                 "question": item["question"],
                 "ground_truth": item.get("answer"),
-                "predicted_probability": result["final_decision"]["answer"],
+                "predicted_value": result["final_decision"]["answer"],
                 "case_history": result
             }
 
