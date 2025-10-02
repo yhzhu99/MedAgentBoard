@@ -1,6 +1,5 @@
 """
 medagentboard/medqa/multi_agent_colacare.py
-
 """
 
 from openai import OpenAI
