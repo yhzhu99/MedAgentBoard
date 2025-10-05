@@ -1,5 +1,7 @@
 # 🏥 *MedAgentBoard*
 
+**🎉 Our paper has been accepted to the NeurIPS 2025 Datasets & Benchmarks Track! 🎉**
+
 [![arXiv](https://img.shields.io/badge/arXiv-2505.12371-b31b1b.svg)](https://arxiv.org/abs/2505.12371)
 [![Project Website](https://img.shields.io/badge/Project%20Website-MedAgentBoard-0066cc.svg)](https://medagentboard.netlify.app/)
 
