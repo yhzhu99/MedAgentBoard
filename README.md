@@ -34,8 +34,10 @@ MedAgentBoard serves as a vital resource, offering actionable insights for resea
 
 The MedAgentBoard benchmark evaluates various approaches, including adaptations or implementations based on principles from the following (and other) influential multi-agent frameworks and related research. The project structure reflects implementations for some of these:
 
-- **WWW 2025** [ColaCare: Enhancing Electronic Health Record Modeling through Large Language Model-Driven Multi-Agent Collaboration](https://arxiv.org/abs/2410.02551)
-- **ACL 2024** [ReConcile: Round-Table Conference Improves Reasoning via Consensus among Diverse LLMs](https://arxiv.org/abs/2309.13007)
+- **WWW 2025** [ColaCare: Enhancing Electronic Health Record Modeling through Large Language Model-Driven Multi-Agent Collaboration](https://dl.acm.org/doi/abs/10.1145/3696410.3714877)
+- **NPJ Digital Medicine 2025** [Enhancing diagnostic capability with multi-agents conversational large language models](https://www.nature.com/articles/s41746-025-01550-0)
+- **NPJ Artificial Intelligence 2025** [Healthcare agent: eliciting the power of large language models for medical consultation](https://www.nature.com/articles/s44387-025-00021-x)
+- **ACL 2024** [ReConcile: Round-Table Conference Improves Reasoning via Consensus among Diverse LLMs](https://aclanthology.org/2024.acl-long.381/)
 - **NeurIPS 2024** [MDAgents: An Adaptive Collaboration of LLMs for Medical Decision-Making](https://proceedings.neurips.cc/paper_files/paper/2024/hash/90d1fc07f46e31387978b88e7e057a31-Abstract-Conference.html)
 - **ACL 2024 Findings** [MedAgents: Large Language Models as Collaborators for Zero-shot Medical Reasoning](https://aclanthology.org/2024.findings-acl.33/)
 - Other frameworks like AgentSimp, SmolAgents, OpenManus, and Owl are also discussed and utilized for specific tasks within MedAgentBoard (see paper for details).
