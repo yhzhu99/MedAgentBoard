@@ -9,6 +9,8 @@
 
 **Authors:** Yinghao Zhu, Ziyi He, Haoran Hu, Xiaochen Zheng, Xichen Zhang, Zixiang Wang, Junyi Gao, Liantao Ma, Lequan Yu
 
+> **We have attached and open-sourced all logs and dataset and experimental results via [Google Drive link](https://drive.google.com/file/d/18N2ZFc86M6jF5dnDjMXtA7YN3bW02bxu/view?usp=sharing). For Task 4, please refer to the [MedAgentBoard-WorkflowAutomation](https://github.com/yhzhu99/MedAgentBoard-WorkflowAutomation) repository. Please note that the MIMIC-related data/results are not included because access requires PhysioNet authorization.**
+
 ## Overview
 
 **MedAgentBoard** is a comprehensive benchmark for the systematic evaluation of multi-agent collaboration, single-LLM, and conventional (non-LLM) approaches across diverse medical tasks. The rapid advancement of Large Language Models (LLMs) has spurred interest in multi-agent collaboration for complex medical challenges. However, the practical advantages of these multi-agent systems are not yet well understood. Existing evaluations often lack generalizability to diverse real-world clinical tasks and frequently omit rigorous comparisons against both advanced single-LLM baselines and established conventional methods.
