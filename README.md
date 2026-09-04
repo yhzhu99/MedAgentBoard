@@ -9,7 +9,7 @@
 
 **Authors:** Yinghao Zhu, Ziyi He, Haoran Hu, Xiaochen Zheng, Xichen Zhang, Zixiang Wang, Junyi Gao, Liantao Ma, Lequan Yu
 
-> **We have attached and open-sourced all logs and dataset and experimental results via [Google Drive link](https://drive.google.com/file/d/18N2ZFc86M6jF5dnDjMXtA7YN3bW02bxu/view?usp=sharing). For Task 4, please refer to the [MedAgentBoard-WorkflowAutomation](https://github.com/yhzhu99/MedAgentBoard-WorkflowAutomation) repository. Please note that the MIMIC-related data/results are not included because access requires PhysioNet authorization.**
+> **We have attached and open-sourced all logs and dataset and experimental results via https://zenodo.org/records/22299495. For Task 4, please refer to the [MedAgentBoard-WorkflowAutomation](https://github.com/yhzhu99/MedAgentBoard-WorkflowAutomation) repository. Please note that the MIMIC-related data/results are not included because access requires PhysioNet authorization.**
 
 ## Overview
 
